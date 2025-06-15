@@ -269,11 +269,11 @@ def get_recipes():
     except Exception as e:
         return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
 
-# AI画像生成API
+# 改良されたプレースホルダー画像システム
 @app.route('/api/generate-image', methods=['POST'])
 def generate_recipe_image():
     try:
-        print("=== AI Image generation request received ===")
+        print("=== Smart Placeholder Image generation ===")
         data = request.json
         print(f"Request data: {data}")
         
@@ -287,52 +287,106 @@ def generate_recipe_image():
             print("ERROR: No recipe name provided")
             return jsonify({'error': 'レシピ名が必要です'}), 400
 
-        # 環境変数チェック
-        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
-        print(f"HF API Key present: {bool(hf_api_key)}")
-        if hf_api_key:
-            print(f"HF API Key starts with: {hf_api_key[:10]}...")
-
-        # AI画像生成を実行
-        if hf_api_key:
-            print("Attempting AI image generation with Hugging Face...")
-            image_url = generate_food_image_huggingface(recipe_name, ingredients)
-            print(f"AI image generation result: {bool(image_url)}")
-            
-            if image_url:
-                print("SUCCESS: AI image generated successfully")
-                return jsonify({
-                    'success': True,
-                    'image_url': image_url,
-                    'recipe_name': recipe_name,
-                    'timestamp': datetime.now().isoformat(),
-                    'type': 'AI Generated'
-                })
-            else:
-                # AI生成失敗時はプレースホルダーにフォールバック
-                print("AI generation failed, falling back to placeholder...")
-                placeholder_images = [
-                    "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format",
-                    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format",
-                    "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format"
+        # 料理の種類に基づいた高品質なプレースホルダー画像を選択
+        food_categories = {
+            'rice_dishes': {
+                'keywords': ['ご飯', 'おにぎり', 'むすび', '丼', 'チャーハン', '炒飯', '茶漬け', 'おこげ', 'rice'],
+                'images': [
+                    "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=512&h=512&fit=crop&auto=format&q=80"
                 ]
-                import random
-                fallback_image = random.choice(placeholder_images)
-                
-                return jsonify({
-                    'success': True,
-                    'image_url': fallback_image,
-                    'recipe_name': recipe_name,
-                    'timestamp': datetime.now().isoformat(),
-                    'type': 'Fallback (AI generation temporarily unavailable)',
-                    'note': 'AI画像生成が一時的に利用できないため、代替画像を表示しています'
-                })
-        else:
-            print("ERROR: HUGGINGFACE_API_KEY not found")
-            return jsonify({
-                'success': False,
-                'error': 'HUGGINGFACE_API_KEYが設定されていません。環境変数を確認してください。'
-            }), 500
+            },
+            'noodles': {
+                'keywords': ['パスタ', 'うどん', 'そば', '焼きそば', 'ラーメン', 'pasta', 'noodles'],
+                'images': [
+                    "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1555126634-323283e090fa?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
+            'vegetables': {
+                'keywords': ['ピーマン', '野菜', 'サラダ', '炒め', 'vegetables', 'salad'],
+                'images': [
+                    "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1529059997568-3d847b1154f0?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
+            'meat_dishes': {
+                'keywords': ['鶏肉', '豚肉', '牛肉', '肉', '唐揚げ', '焼き', 'chicken', 'pork', 'beef'],
+                'images': [
+                    "https://images.unsplash.com/photo-1532636875304-0c89119d9b4d?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1544025162-d76694265947?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
+            'seafood': {
+                'keywords': ['魚', '鮭', 'まぐろ', 'えび', '海鮮', 'fish', 'salmon', 'seafood'],
+                'images': [
+                    "https://images.unsplash.com/photo-1544943910-4c1dc44aab44?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1559847844-d05fcb51d842?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
+            'soups': {
+                'keywords': ['スープ', '汁', '味噌汁', 'soup', 'broth'],
+                'images': [
+                    "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1516684732162-798a0062be99?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
+            'default': {
+                'keywords': [],
+                'images': [
+                    "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            }
+        }
+        
+        # 料理名から最適なカテゴリを自動判定
+        recipe_lower = recipe_name.lower()
+        selected_category = 'default'
+        
+        for category, data in food_categories.items():
+            if category == 'default':
+                continue
+            if any(keyword in recipe_lower for keyword in data['keywords']):
+                selected_category = category
+                break
+        
+        # 食材からも判定を補強
+        if selected_category == 'default':
+            for ingredient in ingredients:
+                ingredient_lower = ingredient.lower()
+                for category, data in food_categories.items():
+                    if category == 'default':
+                        continue
+                    if any(keyword in ingredient_lower for keyword in data['keywords']):
+                        selected_category = category
+                        break
+                if selected_category != 'default':
+                    break
+        
+        import random
+        selected_images = food_categories[selected_category]['images']
+        image_url = random.choice(selected_images)
+        
+        print(f"Selected category: {selected_category}")
+        print(f"Using high-quality placeholder image: {image_url}")
+        
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'recipe_name': recipe_name,
+            'timestamp': datetime.now().isoformat(),
+            'type': 'Smart Placeholder',
+            'category': selected_category,
+            'note': f'料理カテゴリ「{selected_category}」に基づいた高品質画像を表示中'
+        })
 
     except Exception as e:
         print(f"EXCEPTION in generate_recipe_image: {str(e)}")
