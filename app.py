@@ -61,7 +61,7 @@ INGREDIENTS = [
 
 
 def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face APIを使用して料理画像を生成（2025年版）"""
+    """Hugging Face APIを使用して料理画像を生成（2025年動作版）"""
     try:
         hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
         if not hf_api_key:
@@ -70,56 +70,58 @@ def generate_food_image_huggingface(recipe_name, ingredients):
 
         print(f"Generating AI image for: {recipe_name} with ingredients: {ingredients}")
 
-        # より詳細で効果的なプロンプト
-        prompt = f"A delicious, appetizing photo of {recipe_name}, Japanese home cooking, beautifully plated dish with {', '.join(ingredients)}, professional food photography, natural lighting, high quality, realistic, detailed"
-        print(f"Using prompt: {prompt}")
+        # 日本語を英語に翻訳してAIが理解しやすくする
+        recipe_translations = {
+            "ピーマンの塩ダレ焼き": "Grilled green peppers with salt sauce",
+            "親子丼": "Chicken and egg rice bowl (oyakodon)",
+            "チャーハン": "Fried rice",
+            "オムライス": "Omurice (fried rice wrapped in omelet)",
+            "焼きそば": "Yakisoba noodles",
+            "唐揚げ": "Japanese fried chicken (karaage)",
+            "生姜焼き": "Ginger pork stir-fry",
+            "麻婆豆腐": "Mapo tofu",
+            "肉じゃが": "Nikujaga (Japanese beef and potato stew)",
+            "野菜炒め": "Stir-fried vegetables"
+        }
+        
+        # 料理名を英語に変換（辞書にない場合は元の名前を使用）
+        english_recipe = recipe_translations.get(recipe_name, recipe_name)
+        
+        # 食材も英語に変換
+        ingredient_translations = {
+            "ピーマン": "green pepper", "玉ねぎ": "onion", "にんじん": "carrot",
+            "じゃがいも": "potato", "鶏肉": "chicken", "豚肉": "pork",
+            "牛肉": "beef", "卵": "egg", "お米": "rice", "パスタ": "pasta"
+        }
+        
+        english_ingredients = []
+        for ingredient in ingredients:
+            english_ingredient = ingredient_translations.get(ingredient, ingredient)
+            english_ingredients.append(english_ingredient)
+
+        # 改良されたプロンプト（英語）
+        prompt = f"A delicious, appetizing photograph of {english_recipe}, Japanese home cooking, beautifully plated with {', '.join(english_ingredients)}, professional food photography, natural lighting, high quality, detailed, realistic"
+        print(f"Using English prompt: {prompt}")
         
         headers = {
             'Authorization': f'Bearer {hf_api_key}',
-            'Content-Type': 'application/json'
         }
         
-        # 2025年に利用可能なモデルを使用
+        # 2025年に実際に動作するモデル（検索結果から選択）
         models_to_try = [
-            'black-forest-labs/FLUX.1-schnell',  # 2024年の人気モデル
-            'stabilityai/stable-diffusion-xl-base-1.0',  # SDXL
-            'runwayml/stable-diffusion-v1-5',
-            'prompthero/openjourney-v4',  # 代替モデル
-            'dreamlike-art/dreamlike-photoreal-2.0'  # フォトリアル特化
+            'CompVis/stable-diffusion-v1-4',      # 基本的なStable Diffusion
+            'stabilityai/stable-diffusion-2-1',   # 安定版
+            'kandinsky-community/kandinsky-2-2-decoder',  # 代替モデル
         ]
         
         for model in models_to_try:
             try:
                 print(f"Trying model: {model}")
                 
-                # モデルによってパラメータを調整
-                if 'FLUX' in model:
-                    data = {
-                        "inputs": prompt,
-                        "parameters": {
-                            "guidance_scale": 3.5,
-                            "num_inference_steps": 4,
-                            "max_sequence_length": 256
-                        }
-                    }
-                elif 'xl' in model.lower():
-                    data = {
-                        "inputs": prompt,
-                        "parameters": {
-                            "guidance_scale": 7.5,
-                            "num_inference_steps": 20,
-                            "width": 512,
-                            "height": 512
-                        }
-                    }
-                else:
-                    data = {
-                        "inputs": prompt,
-                        "parameters": {
-                            "guidance_scale": 7.5,
-                            "num_inference_steps": 25
-                        }
-                    }
+                # シンプルなデータ構造
+                data = {
+                    "inputs": prompt
+                }
                 
                 response = requests.post(
                     f'https://api-inference.huggingface.co/models/{model}',
@@ -136,42 +138,46 @@ def generate_food_image_huggingface(recipe_name, ingredients):
                     print(f"Content type: {content_type}")
                     
                     if 'application/json' in content_type:
-                        # エラーレスポンスかもしれない
+                        # エラーレスポンスの可能性
                         try:
                             error_data = response.json()
-                            print(f"JSON response: {error_data}")
-                            
-                            # モデルがロード中の場合
                             if 'loading' in str(error_data).lower():
-                                print(f"Model {model} is still loading, trying next...")
+                                print(f"Model {model} is loading, trying next...")
                                 continue
                             else:
-                                print(f"Model {model} returned error: {error_data}")
+                                print(f"JSON response from {model}: {error_data}")
                                 continue
                         except:
-                            print(f"Failed to parse JSON response from {model}")
+                            print(f"Failed to parse JSON from {model}")
                             continue
                     else:
-                        # バイナリ画像データの場合
-                        if len(response.content) > 1000:  # 有効な画像データかチェック
+                        # バイナリ画像データ
+                        if len(response.content) > 1000:
                             image_data = base64.b64encode(response.content).decode('utf-8')
-                            print(f"Successfully generated image with {model}, size: {len(response.content)} bytes")
+                            print(f"SUCCESS: Generated image with {model}, size: {len(response.content)} bytes")
                             return f"data:image/png;base64,{image_data}"
                         else:
-                            print(f"Response too small from {model}: {len(response.content)} bytes")
+                            print(f"Response too small from {model}")
                             continue
                             
                 elif response.status_code == 503:
                     print(f"Model {model} is loading (503), trying next...")
                     continue
                 elif response.status_code == 401:
-                    print(f"Authentication error (401) - check API key")
+                    print(f"Authentication error (401) - check API key permissions")
                     return None
                 elif response.status_code == 404:
                     print(f"Model {model} not found (404), trying next...")
                     continue
+                elif response.status_code == 400:
+                    try:
+                        error_info = response.json()
+                        print(f"Bad request (400) with {model}: {error_info}")
+                    except:
+                        print(f"Bad request (400) with {model}: {response.text}")
+                    continue
                 else:
-                    print(f"HTTP {response.status_code} error with {model}: {response.text}")
+                    print(f"HTTP {response.status_code} error with {model}")
                     continue
                     
             except requests.exceptions.Timeout:
@@ -181,7 +187,7 @@ def generate_food_image_huggingface(recipe_name, ingredients):
                 print(f"Exception with model {model}: {str(model_error)}")
                 continue
         
-        print("All AI models failed or are unavailable")
+        print("All AI models failed")
         return None
             
     except Exception as e:
