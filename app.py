@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 import random
 
+app = Flask(__name__)
+
 # 静的ファイル配信用のルート
 @app.route('/icon-256x256.png')
 def serve_icon():
@@ -13,7 +15,7 @@ def serve_icon():
 def serve_manifest():
     return send_from_directory('.', 'manifest.json')
 
-app = Flask(__name__)
+
 
 # ★ Gemini APIキー設定（環境変数から）
 genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
