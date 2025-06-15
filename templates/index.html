@@ -10,9 +10,11 @@
     <link rel="apple-touch-icon" sizes="256x256" href="/icon-256x256.png">
     <link rel="manifest" href="/manifest.json">
 
-    <!-- ここから PWA設定 -->
+    <!-- PWA設定 -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon-256x256.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon-256x256.png">
     <link rel="icon" type="image/png" sizes="256x256" href="/icon-256x256.png">
-    <link rel="apple-touch-icon" sizes="256x256" href="/icon-256x256.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-256x256.png">
     <link rel="manifest" href="/manifest.json">
     
     <meta name="theme-color" content="#0ea5e9">
@@ -20,7 +22,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Recipé">
     <!-- PWA設定 ここまで -->
-     
+
     <style>
         * {
             margin: 0;
@@ -317,6 +319,50 @@
             box-shadow: none;
         }
 
+        .ai-chef-btn {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            color: white;
+            border: none;
+            padding: 18px 45px;
+            font-size: 1.3em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: block;
+            margin: 20px auto;
+            font-weight: 700;
+            box-shadow: 0 15px 35px rgba(139, 92, 246, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-chef-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .ai-chef-btn:hover:not(:disabled)::before {
+            left: 100%;
+        }
+
+        .ai-chef-btn:hover:not(:disabled) {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(139, 92, 246, 0.4);
+        }
+
+        .ai-chef-btn:disabled {
+            background: linear-gradient(135deg, #cbd5e0 0%, #e2e8f0 100%);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -369,6 +415,25 @@
             font-size: 1em;
             border: 1px solid rgba(255,255,255,0.3);
             box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+        }
+
+        .generation-method {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .generation-method.ai {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            color: white;
+        }
+
+        .generation-method.rule {
+            background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+            color: white;
         }
 
         .error {
@@ -514,37 +579,14 @@
             margin: 0 auto 15px;
         }
 
-        .recipe-selector {
-            margin: 25px 0;
-            display: none;
-            position: relative;
-            z-index: 1;
-        }
-
-        .recipe-selector label {
-            display: block;
-            margin-bottom: 12px;
-            font-weight: 700;
-            color: #0f172a;
-            font-size: 1.05em;
-        }
-
-        .recipe-selector select {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid rgba(14, 165, 233, 0.3);
+        .ai-usage-info {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(167, 139, 250, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.2);
             border-radius: 12px;
-            font-size: 1em;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            color: #0f172a;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .recipe-selector select:focus {
-            outline: none;
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.9em;
+            color: #4c1d95;
         }
 
         /* モバイル対応 */
@@ -619,10 +661,10 @@
                 margin-bottom: 4px;
             }
             
-            .submit-btn {
+            .submit-btn, .ai-chef-btn {
                 padding: 15px 25px;
                 font-size: 1.1em;
-                margin: 30px auto;
+                margin: 20px auto;
                 border-radius: 30px;
             }
             
@@ -657,11 +699,6 @@
                 font-size: 1em;
                 border-radius: 25px;
             }
-            
-            .recipe-selector select {
-                padding: 12px;
-                font-size: 0.9em;
-            }
         }
         
         @media (max-width: 480px) {
@@ -687,8 +724,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🍳 レシピ提案アプリ</h1>
-            <p>気分と食材を選んで、あなたにぴったりのレシピを見つけよう！</p>
+            <h1>🍳 AI レシピシェフ</h1>
+            <p>気分と食材を選んで、AIがあなたにぴったりのレシピを提案します！</p>
         </div>
 
         <div class="content">
@@ -849,7 +886,11 @@
             </div>
 
             <button class="submit-btn" id="submitBtn" onclick="getRecipes()">
-                レシピを提案してもらう 🍴
+                🍴 レシピを提案してもらう
+            </button>
+
+            <button class="ai-chef-btn" id="aiChefBtn" onclick="getRecipes(true)">
+                🤖 AI Chef に相談する
             </button>
 
             <div class="loading" id="loading">
@@ -858,19 +899,17 @@
             </div>
 
             <div class="results" id="results">
+                <div id="generationMethod" class="generation-method"></div>
                 <h3>おすすめレシピ</h3>
                 <div class="recipe-content" id="recipeContent"></div>
                 
+                <div class="ai-usage-info" id="aiUsageInfo" style="display: none;">
+                    <p>🤖 <strong>AI使用状況:</strong> 今日はあと<span id="remainingUsage">0</span>回 AI Chef を利用できます</p>
+                </div>
+                
                 <div class="image-section" id="imageSection">
                     <h4>🖼️ 料理の画像を生成</h4>
-                    <p style="color: #666; margin-bottom: 15px;">お気に入りのレシピの画像を生成してみましょう！</p>
-                    
-                    <div class="recipe-selector" id="recipeSelector">
-                        <label for="recipeSelect">画像を生成するレシピを選択：</label>
-                        <select id="recipeSelect">
-                            <option value="">レシピを選択してください</option>
-                        </select>
-                    </div>
+                    <p style="color: #666; margin-bottom: 15px;">提案されたレシピの画像を生成してみましょう！</p>
                     
                     <button class="image-generate-btn" id="imageGenerateBtn" onclick="generateRecipeImage()" disabled>
                         🎨 画像を生成する
@@ -893,7 +932,7 @@
         // グローバル変数
         let selectedMood = '';
         let selectedIngredients = [];
-        let currentRecipes = [];
+        let currentRecipeName = '';
 
         // 気分選択の処理
         document.getElementById('moodGrid').addEventListener('click', function(e) {
@@ -936,15 +975,19 @@
         // 送信ボタンの状態更新
         function updateSubmitButton() {
             const submitBtn = document.getElementById('submitBtn');
+            const aiChefBtn = document.getElementById('aiChefBtn');
+            
             if (selectedMood && selectedIngredients.length > 0) {
                 submitBtn.disabled = false;
+                aiChefBtn.disabled = false;
             } else {
                 submitBtn.disabled = true;
+                aiChefBtn.disabled = true;
             }
         }
 
-        // レシピ取得関数（App.py連動版）
-        async function getRecipes() {
+        // レシピ取得関数
+        async function getRecipes(forceAI = false) {
             if (!selectedMood || selectedIngredients.length === 0) {
                 alert('気分と食材を選択してください！');
                 return;
@@ -954,6 +997,7 @@
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').style.display = 'none';
             document.getElementById('submitBtn').disabled = true;
+            document.getElementById('aiChefBtn').disabled = true;
 
             try {
                 // FlaskのAPIエンドポイントを呼び出し
@@ -964,7 +1008,8 @@
                     },
                     body: JSON.stringify({
                         mood: selectedMood,
-                        ingredients: selectedIngredients
+                        ingredients: selectedIngredients,
+                        force_ai: forceAI
                     })
                 });
 
@@ -975,7 +1020,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    displayRecipes(data.recipes);
+                    displayRecipes(data.recipes, data.generation_method, data.ai_usage_remaining);
                 } else {
                     throw new Error(data.error || 'レシピの取得に失敗しました');
                 }
@@ -986,12 +1031,13 @@
                 // エラー時はサンプルレシピで代替
                 console.log('Flaskサーバーへの接続に失敗しました。サンプルデータを表示します。');
                 const sampleRecipes = generateSampleRecipes(selectedMood, selectedIngredients);
-                displayRecipes(sampleRecipes);
+                displayRecipes(sampleRecipes, 'error', 0);
                 showError('サーバーに接続できませんでした。サンプルレシピを表示しています。');
                 
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('submitBtn').disabled = false;
+                document.getElementById('aiChefBtn').disabled = false;
             }
         }
 
@@ -1018,75 +1064,59 @@
                 'spicy': 'スパイシー'
             };
 
-            return `【気分・好み】: ${moodNames[mood]}
-【使用可能な食材】: ${selectedIngredientNames.join(', ')}
+            return `## ${selectedIngredientNames[0]}と${selectedIngredientNames[1] || '野菜'}の元気炒め
 
-以下、5つのおすすめレシピをご提案します：
+## 調理情報
+- ⏰ 調理時間: 15分
+- 📊 難易度: ★★☆
+- 🍽️ 人数: 2人分
 
-1. **${selectedIngredientNames[0]}と${selectedIngredientNames[1] || '野菜'}の炒め物**
-   - 調理時間: 15分
-   - 難易度: ★☆☆（初心者向け）
-   - 材料: ${selectedIngredientNames.slice(0, 3).join('、')}、醤油、塩、胡椒
-   - 作り方: 
-     1. 食材を適当な大きさに切る
-     2. フライパンで炒める
-     3. 調味料で味付けして完成
-   - ポイント: 強火で手早く炒めると食材の食感が残って美味しい
+## 材料
+- ${selectedIngredientNames.slice(0, 3).join('、')}
+- 醤油、ごま油、塩、こしょう
 
-2. **簡単${selectedIngredientNames[0]}料理**
-   - 調理時間: 20分
-   - 難易度: ★★☆（中級者向け）
-   - 材料: ${selectedIngredientNames.slice(0, 4).join('、')}、だし、みりん
-   - 作り方: 
-     1. 下準備をしっかりと行う
-     2. 順番に加熱していく
-     3. 調味料を加えて煮込む
-     4. 味を調えて完成
-   - ポイント: ${moodNames[mood]}な気分にぴったりの優しい味付け
+## 作り方
+1. 【下準備】すべての材料を食べやすい大きさに切る
+2. 【加熱】フライパンを中火で熱し、ごま油を入れる
+3. 【炒める】火の通りにくいものから順番に炒める
+4. 【調味】醤油と塩こしょうで味を調える
+5. 【完成】強火で30秒炒めて完成
 
-3. **${selectedIngredientNames[1] || '野菜'}たっぷりヘルシー料理**
-   - 調理時間: 25分
-   - 難易度: ★★☆（中級者向け）
-   - 材料: ${selectedIngredientNames.join('、')}、オリーブオイル、塩
-   - 作り方: 
-     1. 野菜類は食べやすい大きさに切る
-     2. オリーブオイルで炒める
-     3. 蒸し焼きにしてじっくり火を通す
-     4. 塩で味を調える
-   - ポイント: 野菜の甘みを活かした健康的な一品
+## コツ・ポイント
+強火で手早く炒めることで食材のシャキシャキ感を保てます。${moodNames[mood]}な気分にぴったりです！
 
-4. **和風${selectedIngredientNames[0]}丼**
-   - 調理時間: 30分
-   - 難易度: ★★★（上級者向け）
-   - 材料: ${selectedIngredientNames.slice(0, 3).join('、')}、ご飯、卵、醤油、みりん、砂糖
-   - 作り方: 
-     1. 具材を下ごしらえする
-     2. 調味料を合わせて煮汁を作る
-     3. 具材を煮込む
-     4. 卵でとじてご飯にのせる
-   - ポイント: 卵は半熟状態で火を止めると美味しい
-
-5. **創作${selectedIngredientNames[2] || 'ミックス'}料理**
-   - 調理時間: 35分
-   - 難易度: ★★☆（中級者向け）
-   - 材料: ${selectedIngredientNames.join('、')}、お好みの調味料
-   - 作り方: 
-     1. すべての食材を準備する
-     2. 食材の特性に合わせて順番に調理
-     3. 最後に全体を合わせる
-     4. お好みで調味料を追加
-   - ポイント: ${moodNames[mood]}な気分に合わせてアレンジ自在
-
-どのレシピも${moodNames[mood]}な今日にぴったりです！お気に入りのレシピで美味しい料理を作ってくださいね🍴`;
+## なぜこのレシピなのか
+今の気分と選んだ食材を活かした、簡単で美味しい基本レシピです。`;
         }
 
         // レシピ表示関数
-        function displayRecipes(recipesText) {
+        function displayRecipes(recipesText, generationMethod, aiUsageRemaining) {
             document.getElementById('recipeContent').textContent = recipesText;
+            
+            // 生成方法の表示
+            const methodElement = document.getElementById('generationMethod');
+            if (generationMethod === 'ai_generated') {
+                methodElement.textContent = '🤖 AI Chef が生成';
+                methodElement.className = 'generation-method ai';
+            } else if (generationMethod === 'rule_based') {
+                methodElement.textContent = '📋 クラシックレシピ';
+                methodElement.className = 'generation-method rule';
+            } else {
+                methodElement.style.display = 'none';
+            }
+            
+            // AI使用回数の表示
+            if (aiUsageRemaining !== undefined) {
+                const usageInfo = document.getElementById('aiUsageInfo');
+                const remainingUsage = document.getElementById('remainingUsage');
+                remainingUsage.textContent = aiUsageRemaining;
+                usageInfo.style.display = 'block';
+            }
+            
             document.getElementById('results').style.display = 'block';
             
-            // レシピ選択肢を更新
-            updateRecipeSelector(recipesText);
+            // レシピ名を抽出して画像生成ボタンを有効化
+            extractRecipeNameAndEnableImageGeneration(recipesText);
             
             // 結果エリアまでスクロール
             document.getElementById('results').scrollIntoView({ 
@@ -1095,52 +1125,34 @@
             });
         }
 
-        // レシピセレクター更新
-        function updateRecipeSelector(recipesText) {
-            const recipeSelect = document.getElementById('recipeSelect');
-            const recipeSelector = document.getElementById('recipeSelector');
+        // レシピ名を抽出して画像生成ボタンを有効化
+        function extractRecipeNameAndEnableImageGeneration(recipesText) {
+            // レシピ名を抽出（## で始まる行、または **で囲まれたテキスト）
+            const recipeNameMatch = recipesText.match(/^##\s*(.+)$/m) || recipesText.match(/\*\*([^*]+)\*\*/);
             
-            // 既存のオプションをクリア
-            recipeSelect.innerHTML = '<option value="">レシピを選択してください</option>';
-            
-            // レシピ名を抽出（**で囲まれたテキスト）
-            const recipeMatches = recipesText.match(/\*\*([^*]+)\*\*/g);
-            
-            if (recipeMatches) {
-                currentRecipes = recipeMatches.map(match => match.replace(/\*\*/g, ''));
+            if (recipeNameMatch) {
+                currentRecipeName = recipeNameMatch[1].trim();
+                console.log('抽出されたレシピ名:', currentRecipeName);
                 
-                currentRecipes.forEach((recipe, index) => {
-                    const option = document.createElement('option');
-                    option.value = index;
-                    option.textContent = recipe;
-                    recipeSelect.appendChild(option);
-                });
-                
-                recipeSelector.style.display = 'block';
-            }
-            
-            // セレクトボックスの変更イベント
-            recipeSelect.addEventListener('change', function() {
+                // 画像生成ボタンを有効化
                 const imageGenerateBtn = document.getElementById('imageGenerateBtn');
-                if (this.value !== '') {
-                    imageGenerateBtn.disabled = false;
-                } else {
-                    imageGenerateBtn.disabled = true;
-                }
-            });
+                imageGenerateBtn.disabled = false;
+                imageGenerateBtn.textContent = `🎨 「${currentRecipeName}」の画像を生成`;
+            } else {
+                // レシピ名が見つからない場合はデフォルト
+                currentRecipeName = '提案されたレシピ';
+                const imageGenerateBtn = document.getElementById('imageGenerateBtn');
+                imageGenerateBtn.disabled = false;
+                imageGenerateBtn.textContent = '🎨 レシピの画像を生成';
+            }
         }
 
-        // 画像生成関数（App.py連動版）
+        // 画像生成関数
         async function generateRecipeImage() {
-            const recipeSelect = document.getElementById('recipeSelect');
-            const selectedIndex = recipeSelect.value;
-            
-            if (selectedIndex === '') {
-                alert('レシピを選択してください！');
+            if (!currentRecipeName) {
+                alert('レシピが見つかりません！');
                 return;
             }
-            
-            const recipeName = currentRecipes[selectedIndex];
             
             // UI更新
             document.getElementById('imageLoading').style.display = 'block';
@@ -1155,19 +1167,8 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        recipe_name: recipeName,
-                        ingredients: selectedIngredients.map(id => {
-                            const ingredientNames = {
-                                'rice': 'お米', 'pasta': 'パスタ', 'bread': 'パン', 'udon': 'うどん', 'soba': 'そば',
-                                'chicken': '鶏肉', 'pork': '豚肉', 'beef': '牛肉', 'ground_meat': 'ひき肉',
-                                'salmon': '鮭', 'tuna': 'まぐろ', 'shrimp': 'えび',
-                                'egg': '卵', 'milk': '牛乳', 'cheese': 'チーズ', 'tofu': '豆腐', 'natto': '納豆',
-                                'onion': '玉ねぎ', 'carrot': 'にんじん', 'potato': 'じゃがいも', 'cabbage': 'キャベツ',
-                                'tomato': 'トマト', 'cucumber': 'きゅうり', 'lettuce': 'レタス', 'spinach': 'ほうれん草',
-                                'mushroom': 'きのこ類', 'bell_pepper': 'ピーマン', 'banana': 'バナナ', 'apple': 'りんご', 'lemon': 'レモン'
-                            };
-                            return ingredientNames[id] || id;
-                        })
+                        recipe_name: currentRecipeName,
+                        ingredients: selectedIngredients
                     })
                 });
 
@@ -1180,7 +1181,7 @@
                 if (data.success && data.image_url) {
                     const recipeImage = document.getElementById('recipeImage');
                     recipeImage.src = data.image_url;
-                    recipeImage.alt = `${recipeName}の画像`;
+                    recipeImage.alt = `${currentRecipeName}の画像`;
                     recipeImage.style.display = 'block';
                 } else {
                     throw new Error(data.error || '画像生成に失敗しました');
@@ -1190,7 +1191,6 @@
                 console.error('画像生成エラー:', error);
                 
                 // エラー時はプレースホルダー画像で代替
-                console.log('Flaskサーバーへの接続に失敗しました。プレースホルダー画像を表示します。');
                 const sampleImages = [
                     'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format&q=80',
                     'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format&q=80',
@@ -1202,7 +1202,7 @@
                 
                 const recipeImage = document.getElementById('recipeImage');
                 recipeImage.src = randomImage;
-                recipeImage.alt = `${recipeName}の画像（プレースホルダー）`;
+                recipeImage.alt = `${currentRecipeName}の画像（プレースホルダー）`;
                 recipeImage.style.display = 'block';
                 
                 showError('画像生成サーバーに接続できませんでした。プレースホルダー画像を表示しています。');
@@ -1235,7 +1235,7 @@
             // 選択状態をリセット
             selectedMood = '';
             selectedIngredients = [];
-            currentRecipes = [];
+            currentRecipeName = '';
             
             // UI状態をリセット
             document.querySelectorAll('.mood-card').forEach(card => {
@@ -1249,13 +1249,15 @@
             // 表示要素を隠す
             document.getElementById('results').style.display = 'none';
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('recipeSelector').style.display = 'none';
             document.getElementById('recipeImage').style.display = 'none';
             document.getElementById('imageLoading').style.display = 'none';
+            document.getElementById('aiUsageInfo').style.display = 'none';
             
             // ボタン状態をリセット
             document.getElementById('submitBtn').disabled = true;
+            document.getElementById('aiChefBtn').disabled = true;
             document.getElementById('imageGenerateBtn').disabled = true;
+            document.getElementById('imageGenerateBtn').textContent = '🎨 画像を生成する';
             
             // トップまでスクロール
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1263,7 +1265,7 @@
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('レシピ提案アプリが初期化されました');
+            console.log('AI レシピシェフが初期化されました');
             updateSubmitButton();
         });
     </script>
