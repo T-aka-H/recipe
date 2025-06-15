@@ -61,77 +61,117 @@ INGREDIENTS = [
 
 
 def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face APIを使用して料理画像を生成"""
+    """Hugging Face APIを使用して料理画像を生成（2025年版）"""
     try:
         hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
         if not hf_api_key:
             print("ERROR: HUGGINGFACE_API_KEY not found in environment variables")
             return None
 
-        print(f"Generating image for: {recipe_name} with ingredients: {ingredients}")
+        print(f"Generating AI image for: {recipe_name} with ingredients: {ingredients}")
 
-        # 日本料理に特化したプロンプト
-        prompt = f"A beautiful, appetizing photo of {recipe_name}, Japanese home cooking dish, made with {', '.join(ingredients)}, professional food photography, natural soft lighting, wooden table, high resolution, realistic"
+        # より詳細で効果的なプロンプト
+        prompt = f"A delicious, appetizing photo of {recipe_name}, Japanese home cooking, beautifully plated dish with {', '.join(ingredients)}, professional food photography, natural lighting, high quality, realistic, detailed"
         print(f"Using prompt: {prompt}")
         
         headers = {
             'Authorization': f'Bearer {hf_api_key}',
+            'Content-Type': 'application/json'
         }
         
-        # シンプルなデータ構造に変更
-        data = {
-            'inputs': prompt
-        }
-        
-        # より信頼性の高いモデルを使用
+        # 2025年に利用可能なモデルを使用
         models_to_try = [
+            'black-forest-labs/FLUX.1-schnell',  # 2024年の人気モデル
+            'stabilityai/stable-diffusion-xl-base-1.0',  # SDXL
             'runwayml/stable-diffusion-v1-5',
-            'CompVis/stable-diffusion-v1-4'
+            'prompthero/openjourney-v4',  # 代替モデル
+            'dreamlike-art/dreamlike-photoreal-2.0'  # フォトリアル特化
         ]
         
         for model in models_to_try:
             try:
                 print(f"Trying model: {model}")
+                
+                # モデルによってパラメータを調整
+                if 'FLUX' in model:
+                    data = {
+                        "inputs": prompt,
+                        "parameters": {
+                            "guidance_scale": 3.5,
+                            "num_inference_steps": 4,
+                            "max_sequence_length": 256
+                        }
+                    }
+                elif 'xl' in model.lower():
+                    data = {
+                        "inputs": prompt,
+                        "parameters": {
+                            "guidance_scale": 7.5,
+                            "num_inference_steps": 20,
+                            "width": 512,
+                            "height": 512
+                        }
+                    }
+                else:
+                    data = {
+                        "inputs": prompt,
+                        "parameters": {
+                            "guidance_scale": 7.5,
+                            "num_inference_steps": 25
+                        }
+                    }
+                
                 response = requests.post(
                     f'https://api-inference.huggingface.co/models/{model}',
                     headers=headers, 
                     json=data, 
-                    timeout=60
+                    timeout=120
                 )
                 
                 print(f"Response status code: {response.status_code}")
-                print(f"Response headers: {dict(response.headers)}")
                 
                 if response.status_code == 200:
-                    # レスポンスがJSONかバイナリかチェック
+                    # レスポンスタイプをチェック
                     content_type = response.headers.get('content-type', '')
+                    print(f"Content type: {content_type}")
+                    
                     if 'application/json' in content_type:
-                        # エラーレスポンスの場合
-                        error_data = response.json()
-                        print(f"API returned JSON error: {error_data}")
-                        continue
+                        # エラーレスポンスかもしれない
+                        try:
+                            error_data = response.json()
+                            print(f"JSON response: {error_data}")
+                            
+                            # モデルがロード中の場合
+                            if 'loading' in str(error_data).lower():
+                                print(f"Model {model} is still loading, trying next...")
+                                continue
+                            else:
+                                print(f"Model {model} returned error: {error_data}")
+                                continue
+                        except:
+                            print(f"Failed to parse JSON response from {model}")
+                            continue
                     else:
-                        # 画像データの場合
-                        image_data = base64.b64encode(response.content).decode('utf-8')
-                        print(f"Successfully generated image, size: {len(response.content)} bytes")
-                        return f"data:image/png;base64,{image_data}"
-                        
+                        # バイナリ画像データの場合
+                        if len(response.content) > 1000:  # 有効な画像データかチェック
+                            image_data = base64.b64encode(response.content).decode('utf-8')
+                            print(f"Successfully generated image with {model}, size: {len(response.content)} bytes")
+                            return f"data:image/png;base64,{image_data}"
+                        else:
+                            print(f"Response too small from {model}: {len(response.content)} bytes")
+                            continue
+                            
                 elif response.status_code == 503:
-                    # モデルがロード中の場合
-                    print(f"Model {model} is loading, trying next model...")
-                    try:
-                        error_info = response.json()
-                        print(f"503 Error details: {error_info}")
-                    except:
-                        print(f"503 Error: {response.text}")
+                    print(f"Model {model} is loading (503), trying next...")
+                    continue
+                elif response.status_code == 401:
+                    print(f"Authentication error (401) - check API key")
+                    return None
+                elif response.status_code == 404:
+                    print(f"Model {model} not found (404), trying next...")
                     continue
                 else:
-                    print(f"Hugging Face API error with {model}: {response.status_code}")
-                    try:
-                        error_info = response.json()
-                        print(f"Error details: {error_info}")
-                    except:
-                        print(f"Error text: {response.text}")
+                    print(f"HTTP {response.status_code} error with {model}: {response.text}")
                     continue
                     
             except requests.exceptions.Timeout:
@@ -141,7 +181,7 @@ def generate_food_image_huggingface(recipe_name, ingredients):
                 print(f"Exception with model {model}: {str(model_error)}")
                 continue
         
-        print("All models failed or are unavailable")
+        print("All AI models failed or are unavailable")
         return None
             
     except Exception as e:
@@ -207,11 +247,11 @@ def get_recipes():
     except Exception as e:
         return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
 
-# 画像生成API（プレースホルダー版）
+# AI画像生成API
 @app.route('/api/generate-image', methods=['POST'])
 def generate_recipe_image():
     try:
-        print("=== Image generation request received ===")
+        print("=== AI Image generation request received ===")
         data = request.json
         print(f"Request data: {data}")
         
@@ -225,53 +265,52 @@ def generate_recipe_image():
             print("ERROR: No recipe name provided")
             return jsonify({'error': 'レシピ名が必要です'}), 400
 
-        # 料理の種類に応じたプレースホルダー画像を選択
-        placeholder_images = {
-            'default': [
-                "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=512&h=512&fit=crop&auto=format"
-            ],
-            'rice': [
-                "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=512&h=512&fit=crop&auto=format"
-            ],
-            'pasta': [
-                "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=512&h=512&fit=crop&auto=format"
-            ],
-            'salad': [
-                "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=512&h=512&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=512&h=512&fit=crop&auto=format"
-            ]
-        }
-        
-        # 料理名から画像カテゴリを推測
-        recipe_lower = recipe_name.lower()
-        if any(word in recipe_lower for word in ['ご飯', '米', 'rice', '丼', 'おにぎり']):
-            category = 'rice'
-        elif any(word in recipe_lower for word in ['パスタ', 'pasta', 'スパゲッティ', 'ペンネ']):
-            category = 'pasta'
-        elif any(word in recipe_lower for word in ['サラダ', 'salad', '野菜']):
-            category = 'salad'
+        # 環境変数チェック
+        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
+        print(f"HF API Key present: {bool(hf_api_key)}")
+        if hf_api_key:
+            print(f"HF API Key starts with: {hf_api_key[:10]}...")
+
+        # AI画像生成を実行
+        if hf_api_key:
+            print("Attempting AI image generation with Hugging Face...")
+            image_url = generate_food_image_huggingface(recipe_name, ingredients)
+            print(f"AI image generation result: {bool(image_url)}")
+            
+            if image_url:
+                print("SUCCESS: AI image generated successfully")
+                return jsonify({
+                    'success': True,
+                    'image_url': image_url,
+                    'recipe_name': recipe_name,
+                    'timestamp': datetime.now().isoformat(),
+                    'type': 'AI Generated'
+                })
+            else:
+                # AI生成失敗時はプレースホルダーにフォールバック
+                print("AI generation failed, falling back to placeholder...")
+                placeholder_images = [
+                    "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format",
+                    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format",
+                    "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format"
+                ]
+                import random
+                fallback_image = random.choice(placeholder_images)
+                
+                return jsonify({
+                    'success': True,
+                    'image_url': fallback_image,
+                    'recipe_name': recipe_name,
+                    'timestamp': datetime.now().isoformat(),
+                    'type': 'Fallback (AI generation temporarily unavailable)',
+                    'note': 'AI画像生成が一時的に利用できないため、代替画像を表示しています'
+                })
         else:
-            category = 'default'
-        
-        import random
-        image_url = random.choice(placeholder_images[category])
-        
-        print(f"Selected category: {category}")
-        print(f"Using placeholder image: {image_url}")
-        
-        return jsonify({
-            'success': True,
-            'image_url': image_url,
-            'recipe_name': recipe_name,
-            'timestamp': datetime.now().isoformat(),
-            'note': f'プレースホルダー画像を使用中 (カテゴリ: {category})'
-        })
+            print("ERROR: HUGGINGFACE_API_KEY not found")
+            return jsonify({
+                'success': False,
+                'error': 'HUGGINGFACE_API_KEYが設定されていません。環境変数を確認してください。'
+            }), 500
 
     except Exception as e:
         print(f"EXCEPTION in generate_recipe_image: {str(e)}")
