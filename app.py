@@ -2,9 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import google.generativeai as genai
 import os
 from datetime import datetime
-import requests
-import base64
-from io import BytesIO
+import random
 
 app = Flask(__name__)
 
@@ -57,160 +55,6 @@ INGREDIENTS = [
     {"id": "apple", "name": "りんご", "category": "果物"},
     {"id": "lemon", "name": "レモン", "category": "果物"}
 ]
-
-
-
-def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face新しいInference Providersを使用して料理画像を生成"""
-    try:
-        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
-        if not hf_api_key:
-            print("ERROR: HUGGINGFACE_API_KEY not found in environment variables")
-            return None
-
-        print(f"Generating AI image for: {recipe_name} with ingredients: {ingredients}")
-
-        # 日本語を英語に翻訳してAIが理解しやすくする
-        recipe_translations = {
-            "ピーマンの塩ダレ焼き": "Grilled green peppers with salt sauce",
-            "親子丼": "Chicken and egg rice bowl (oyakodon)",
-            "きのこの塩焼きおにぎり": "Grilled mushroom rice balls with salt",
-            "チャーハン": "Fried rice",
-            "オムライス": "Omurice (fried rice wrapped in omelet)",
-            "焼きそば": "Yakisoba noodles",
-            "唐揚げ": "Japanese fried chicken (karaage)",
-            "生姜焼き": "Ginger pork stir-fry",
-            "麻婆豆腐": "Mapo tofu",
-            "肉じゃが": "Nikujaga (Japanese beef and potato stew)",
-            "野菜炒め": "Stir-fried vegetables"
-        }
-        
-        # 料理名を英語に変換
-        english_recipe = recipe_translations.get(recipe_name, recipe_name)
-        
-        # 食材も英語に変換
-        ingredient_translations = {
-            "ピーマン": "green pepper", "玉ねぎ": "onion", "にんじん": "carrot",
-            "じゃがいも": "potato", "鶏肉": "chicken", "豚肉": "pork",
-            "牛肉": "beef", "卵": "egg", "お米": "rice", "パスタ": "pasta",
-            "きのこ類": "mushrooms", "きのこ": "mushrooms"
-        }
-        
-        english_ingredients = []
-        for ingredient in ingredients:
-            english_ingredient = ingredient_translations.get(ingredient, ingredient)
-            english_ingredients.append(english_ingredient)
-
-        # 改良されたプロンプト（英語）
-        prompt = f"A delicious, appetizing photograph of {english_recipe}, Japanese home cooking, beautifully plated with {', '.join(english_ingredients)}, professional food photography, natural lighting, high quality, detailed, realistic"
-        print(f"Using English prompt: {prompt}")
-        
-        # 新しいInference Providers APIを試行
-        try:
-            print("Trying new Inference Providers API...")
-            
-            # 新しいInference Providersのエンドポイント
-            headers = {
-                'Authorization': f'Bearer {hf_api_key}',
-                'Content-Type': 'application/json'
-            }
-            
-            # 複数のプロバイダーとモデルを試行
-            provider_configs = [
-                {
-                    'url': 'https://router.huggingface.co/fal-ai/image/generation',
-                    'provider': 'fal-ai',
-                    'model': 'fal-ai/flux-lora'
-                },
-                {
-                    'url': 'https://router.huggingface.co/replicate/image/generation', 
-                    'provider': 'replicate',
-                    'model': 'stability-ai/stable-diffusion'
-                }
-            ]
-            
-            for config in provider_configs:
-                try:
-                    print(f"Trying provider: {config['provider']}")
-                    
-                    data = {
-                        "inputs": prompt,
-                        "model": config['model'],
-                        "parameters": {
-                            "width": 512,
-                            "height": 512,
-                            "guidance_scale": 7.5,
-                            "num_inference_steps": 20
-                        }
-                    }
-                    
-                    response = requests.post(
-                        config['url'],
-                        headers=headers,
-                        json=data,
-                        timeout=120
-                    )
-                    
-                    print(f"Provider {config['provider']} response: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        content_type = response.headers.get('content-type', '')
-                        if 'application/json' not in content_type and len(response.content) > 1000:
-                            image_data = base64.b64encode(response.content).decode('utf-8')
-                            print(f"SUCCESS: Generated image with {config['provider']}")
-                            return f"data:image/png;base64,{image_data}"
-                        else:
-                            print(f"Provider {config['provider']} returned JSON or small response")
-                            try:
-                                json_response = response.json()
-                                print(f"JSON response: {json_response}")
-                            except:
-                                pass
-                    else:
-                        print(f"Provider {config['provider']} failed with status {response.status_code}")
-                        
-                except Exception as provider_error:
-                    print(f"Provider {config['provider']} error: {str(provider_error)}")
-                    continue
-                    
-        except Exception as providers_error:
-            print(f"Inference Providers error: {str(providers_error)}")
-        
-        # フォールバック：従来のAPIを一度だけ試行
-        try:
-            print("Trying fallback: traditional API...")
-            
-            headers = {'Authorization': f'Bearer {hf_api_key}'}
-            data = {"inputs": prompt}
-            
-            # 最も基本的なモデルを1つだけ試行
-            response = requests.post(
-                'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
-                headers=headers, 
-                json=data, 
-                timeout=60
-            )
-            
-            print(f"Fallback response: {response.status_code}")
-            
-            if response.status_code == 200:
-                content_type = response.headers.get('content-type', '')
-                if 'application/json' not in content_type and len(response.content) > 1000:
-                    image_data = base64.b64encode(response.content).decode('utf-8')
-                    print("SUCCESS: Generated image with fallback API")
-                    return f"data:image/png;base64,{image_data}"
-                    
-        except Exception as fallback_error:
-            print(f"Fallback API error: {str(fallback_error)}")
-        
-        print("All AI image generation methods failed")
-        return None
-            
-    except Exception as e:
-        print(f"Hugging Face画像生成エラー: {str(e)}")
-        import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
-        return None
 
 # ルートページ
 @app.route('/')
@@ -267,13 +111,14 @@ def get_recipes():
         })
 
     except Exception as e:
+        print(f"レシピ生成エラー: {str(e)}")
         return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
 
-# 改良されたプレースホルダー画像システム
+# 簡略化されたプレースホルダー画像システム
 @app.route('/api/generate-image', methods=['POST'])
 def generate_recipe_image():
     try:
-        print("=== Smart Placeholder Image generation ===")
+        print("=== プレースホルダー画像生成 ===")
         data = request.json
         print(f"Request data: {data}")
         
@@ -336,6 +181,13 @@ def generate_recipe_image():
                     "https://images.unsplash.com/photo-1516684732162-798a0062be99?w=512&h=512&fit=crop&auto=format&q=80"
                 ]
             },
+            'egg_dishes': {
+                'keywords': ['卵', '親子丼', 'オムライス', 'egg', 'omelet'],
+                'images': [
+                    "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=512&h=512&fit=crop&auto=format&q=80",
+                    "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=512&h=512&fit=crop&auto=format&q=80"
+                ]
+            },
             'default': {
                 'keywords': [],
                 'images': [
@@ -371,7 +223,6 @@ def generate_recipe_image():
                 if selected_category != 'default':
                     break
         
-        import random
         selected_images = food_categories[selected_category]['images']
         image_url = random.choice(selected_images)
         
@@ -383,9 +234,9 @@ def generate_recipe_image():
             'image_url': image_url,
             'recipe_name': recipe_name,
             'timestamp': datetime.now().isoformat(),
-            'type': 'Smart Placeholder',
+            'type': 'プレースホルダー画像',
             'category': selected_category,
-            'note': f'料理カテゴリ「{selected_category}」に基づいた高品質画像を表示中'
+            'note': f'料理カテゴリ「{selected_category}」に基づいた高品質なプレースホルダー画像'
         })
 
     except Exception as e:
@@ -402,4 +253,4 @@ def health_check():
 # 実行
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
