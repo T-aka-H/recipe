@@ -207,7 +207,7 @@ def get_recipes():
     except Exception as e:
         return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
 
-# 画像生成API
+# 画像生成API（プレースホルダー版）
 @app.route('/api/generate-image', methods=['POST'])
 def generate_recipe_image():
     try:
@@ -225,40 +225,53 @@ def generate_recipe_image():
             print("ERROR: No recipe name provided")
             return jsonify({'error': 'レシピ名が必要です'}), 400
 
-        # 環境変数チェック
-        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
-        print(f"HF API Key present: {bool(hf_api_key)}")
-        if hf_api_key:
-            print(f"HF API Key starts with: {hf_api_key[:10]}...")
-
-        # Hugging Face APIを使用して画像生成
-        image_url = None
+        # 料理の種類に応じたプレースホルダー画像を選択
+        placeholder_images = {
+            'default': [
+                "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=512&h=512&fit=crop&auto=format"
+            ],
+            'rice': [
+                "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=512&h=512&fit=crop&auto=format"
+            ],
+            'pasta': [
+                "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=512&h=512&fit=crop&auto=format"
+            ],
+            'salad': [
+                "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=512&h=512&fit=crop&auto=format",
+                "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=512&h=512&fit=crop&auto=format"
+            ]
+        }
         
-        if hf_api_key:
-            print("Attempting image generation with Hugging Face...")
-            image_url = generate_food_image_huggingface(recipe_name, ingredients)
-            print(f"Image generation result: {bool(image_url)}")
+        # 料理名から画像カテゴリを推測
+        recipe_lower = recipe_name.lower()
+        if any(word in recipe_lower for word in ['ご飯', '米', 'rice', '丼', 'おにぎり']):
+            category = 'rice'
+        elif any(word in recipe_lower for word in ['パスタ', 'pasta', 'スパゲッティ', 'ペンネ']):
+            category = 'pasta'
+        elif any(word in recipe_lower for word in ['サラダ', 'salad', '野菜']):
+            category = 'salad'
         else:
-            print("ERROR: HUGGINGFACE_API_KEY not found")
-            return jsonify({
-                'success': False,
-                'error': 'HUGGINGFACE_API_KEYが設定されていません。環境変数を確認してください。'
-            }), 500
-
-        if image_url:
-            print("SUCCESS: Image generated successfully")
-            return jsonify({
-                'success': True,
-                'image_url': image_url,
-                'recipe_name': recipe_name,
-                'timestamp': datetime.now().isoformat()
-            })
-        else:
-            print("ERROR: Image generation failed")
-            return jsonify({
-                'success': False,
-                'error': '画像生成に失敗しました。しばらく時間をおいてから再試行してください。'
-            }), 500
+            category = 'default'
+        
+        import random
+        image_url = random.choice(placeholder_images[category])
+        
+        print(f"Selected category: {category}")
+        print(f"Using placeholder image: {image_url}")
+        
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'recipe_name': recipe_name,
+            'timestamp': datetime.now().isoformat(),
+            'note': f'プレースホルダー画像を使用中 (カテゴリ: {category})'
+        })
 
     except Exception as e:
         print(f"EXCEPTION in generate_recipe_image: {str(e)}")
