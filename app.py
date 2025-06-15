@@ -61,7 +61,7 @@ INGREDIENTS = [
 
 
 def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face APIを使用して料理画像を生成（2025年動作版）"""
+    """Hugging Face新しいInference Providersを使用して料理画像を生成"""
     try:
         hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
         if not hf_api_key:
@@ -74,6 +74,7 @@ def generate_food_image_huggingface(recipe_name, ingredients):
         recipe_translations = {
             "ピーマンの塩ダレ焼き": "Grilled green peppers with salt sauce",
             "親子丼": "Chicken and egg rice bowl (oyakodon)",
+            "きのこの塩焼きおにぎり": "Grilled mushroom rice balls with salt",
             "チャーハン": "Fried rice",
             "オムライス": "Omurice (fried rice wrapped in omelet)",
             "焼きそば": "Yakisoba noodles",
@@ -84,14 +85,15 @@ def generate_food_image_huggingface(recipe_name, ingredients):
             "野菜炒め": "Stir-fried vegetables"
         }
         
-        # 料理名を英語に変換（辞書にない場合は元の名前を使用）
+        # 料理名を英語に変換
         english_recipe = recipe_translations.get(recipe_name, recipe_name)
         
         # 食材も英語に変換
         ingredient_translations = {
             "ピーマン": "green pepper", "玉ねぎ": "onion", "にんじん": "carrot",
             "じゃがいも": "potato", "鶏肉": "chicken", "豚肉": "pork",
-            "牛肉": "beef", "卵": "egg", "お米": "rice", "パスタ": "pasta"
+            "牛肉": "beef", "卵": "egg", "お米": "rice", "パスタ": "pasta",
+            "きのこ類": "mushrooms", "きのこ": "mushrooms"
         }
         
         english_ingredients = []
@@ -103,91 +105,105 @@ def generate_food_image_huggingface(recipe_name, ingredients):
         prompt = f"A delicious, appetizing photograph of {english_recipe}, Japanese home cooking, beautifully plated with {', '.join(english_ingredients)}, professional food photography, natural lighting, high quality, detailed, realistic"
         print(f"Using English prompt: {prompt}")
         
-        headers = {
-            'Authorization': f'Bearer {hf_api_key}',
-        }
-        
-        # 2025年に実際に動作するモデル（検索結果から選択）
-        models_to_try = [
-            'CompVis/stable-diffusion-v1-4',      # 基本的なStable Diffusion
-            'stabilityai/stable-diffusion-2-1',   # 安定版
-            'kandinsky-community/kandinsky-2-2-decoder',  # 代替モデル
-        ]
-        
-        for model in models_to_try:
-            try:
-                print(f"Trying model: {model}")
-                
-                # シンプルなデータ構造
-                data = {
-                    "inputs": prompt
+        # 新しいInference Providers APIを試行
+        try:
+            print("Trying new Inference Providers API...")
+            
+            # 新しいInference Providersのエンドポイント
+            headers = {
+                'Authorization': f'Bearer {hf_api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # 複数のプロバイダーとモデルを試行
+            provider_configs = [
+                {
+                    'url': 'https://router.huggingface.co/fal-ai/image/generation',
+                    'provider': 'fal-ai',
+                    'model': 'fal-ai/flux-lora'
+                },
+                {
+                    'url': 'https://router.huggingface.co/replicate/image/generation', 
+                    'provider': 'replicate',
+                    'model': 'stability-ai/stable-diffusion'
                 }
-                
-                response = requests.post(
-                    f'https://api-inference.huggingface.co/models/{model}',
-                    headers=headers, 
-                    json=data, 
-                    timeout=120
-                )
-                
-                print(f"Response status code: {response.status_code}")
-                
-                if response.status_code == 200:
-                    # レスポンスタイプをチェック
-                    content_type = response.headers.get('content-type', '')
-                    print(f"Content type: {content_type}")
+            ]
+            
+            for config in provider_configs:
+                try:
+                    print(f"Trying provider: {config['provider']}")
                     
-                    if 'application/json' in content_type:
-                        # エラーレスポンスの可能性
-                        try:
-                            error_data = response.json()
-                            if 'loading' in str(error_data).lower():
-                                print(f"Model {model} is loading, trying next...")
-                                continue
-                            else:
-                                print(f"JSON response from {model}: {error_data}")
-                                continue
-                        except:
-                            print(f"Failed to parse JSON from {model}")
-                            continue
-                    else:
-                        # バイナリ画像データ
-                        if len(response.content) > 1000:
+                    data = {
+                        "inputs": prompt,
+                        "model": config['model'],
+                        "parameters": {
+                            "width": 512,
+                            "height": 512,
+                            "guidance_scale": 7.5,
+                            "num_inference_steps": 20
+                        }
+                    }
+                    
+                    response = requests.post(
+                        config['url'],
+                        headers=headers,
+                        json=data,
+                        timeout=120
+                    )
+                    
+                    print(f"Provider {config['provider']} response: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        content_type = response.headers.get('content-type', '')
+                        if 'application/json' not in content_type and len(response.content) > 1000:
                             image_data = base64.b64encode(response.content).decode('utf-8')
-                            print(f"SUCCESS: Generated image with {model}, size: {len(response.content)} bytes")
+                            print(f"SUCCESS: Generated image with {config['provider']}")
                             return f"data:image/png;base64,{image_data}"
                         else:
-                            print(f"Response too small from {model}")
-                            continue
-                            
-                elif response.status_code == 503:
-                    print(f"Model {model} is loading (503), trying next...")
-                    continue
-                elif response.status_code == 401:
-                    print(f"Authentication error (401) - check API key permissions")
-                    return None
-                elif response.status_code == 404:
-                    print(f"Model {model} not found (404), trying next...")
-                    continue
-                elif response.status_code == 400:
-                    try:
-                        error_info = response.json()
-                        print(f"Bad request (400) with {model}: {error_info}")
-                    except:
-                        print(f"Bad request (400) with {model}: {response.text}")
-                    continue
-                else:
-                    print(f"HTTP {response.status_code} error with {model}")
+                            print(f"Provider {config['provider']} returned JSON or small response")
+                            try:
+                                json_response = response.json()
+                                print(f"JSON response: {json_response}")
+                            except:
+                                pass
+                    else:
+                        print(f"Provider {config['provider']} failed with status {response.status_code}")
+                        
+                except Exception as provider_error:
+                    print(f"Provider {config['provider']} error: {str(provider_error)}")
                     continue
                     
-            except requests.exceptions.Timeout:
-                print(f"Timeout with model {model}, trying next...")
-                continue
-            except Exception as model_error:
-                print(f"Exception with model {model}: {str(model_error)}")
-                continue
+        except Exception as providers_error:
+            print(f"Inference Providers error: {str(providers_error)}")
         
-        print("All AI models failed")
+        # フォールバック：従来のAPIを一度だけ試行
+        try:
+            print("Trying fallback: traditional API...")
+            
+            headers = {'Authorization': f'Bearer {hf_api_key}'}
+            data = {"inputs": prompt}
+            
+            # 最も基本的なモデルを1つだけ試行
+            response = requests.post(
+                'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+                headers=headers, 
+                json=data, 
+                timeout=60
+            )
+            
+            print(f"Fallback response: {response.status_code}")
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                if 'application/json' not in content_type and len(response.content) > 1000:
+                    image_data = base64.b64encode(response.content).decode('utf-8')
+                    print("SUCCESS: Generated image with fallback API")
+                    return f"data:image/png;base64,{image_data}"
+                    
+        except Exception as fallback_error:
+            print(f"Fallback API error: {str(fallback_error)}")
+        
+        print("All AI image generation methods failed")
         return None
             
     except Exception as e:
