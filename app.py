@@ -65,62 +65,89 @@ def generate_food_image_huggingface(recipe_name, ingredients):
     try:
         hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
         if not hf_api_key:
-            print("HUGGINGFACE_API_KEY not found")
+            print("ERROR: HUGGINGFACE_API_KEY not found in environment variables")
             return None
+
+        print(f"Generating image for: {recipe_name} with ingredients: {ingredients}")
 
         # 日本料理に特化したプロンプト
         prompt = f"A beautiful, appetizing photo of {recipe_name}, Japanese home cooking dish, made with {', '.join(ingredients)}, professional food photography, natural soft lighting, wooden table, high resolution, realistic"
+        print(f"Using prompt: {prompt}")
         
         headers = {
             'Authorization': f'Bearer {hf_api_key}',
-            'Content-Type': 'application/json'
         }
         
+        # シンプルなデータ構造に変更
         data = {
-            'inputs': prompt,
-            'parameters': {
-                'negative_prompt': 'blurry, low quality, distorted, ugly, bad anatomy',
-                'num_inference_steps': 30,
-                'guidance_scale': 7.5,
-                'width': 512,
-                'height': 512
-            }
+            'inputs': prompt
         }
         
         # より信頼性の高いモデルを使用
         models_to_try = [
             'runwayml/stable-diffusion-v1-5',
-            'stabilityai/stable-diffusion-xl-base-1.0',
             'CompVis/stable-diffusion-v1-4'
         ]
         
         for model in models_to_try:
             try:
+                print(f"Trying model: {model}")
                 response = requests.post(
                     f'https://api-inference.huggingface.co/models/{model}',
-                    headers=headers, json=data, timeout=120
+                    headers=headers, 
+                    json=data, 
+                    timeout=60
                 )
                 
+                print(f"Response status code: {response.status_code}")
+                print(f"Response headers: {dict(response.headers)}")
+                
                 if response.status_code == 200:
-                    # 画像データをBase64エンコード
-                    image_data = base64.b64encode(response.content).decode('utf-8')
-                    return f"data:image/png;base64,{image_data}"
+                    # レスポンスがJSONかバイナリかチェック
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' in content_type:
+                        # エラーレスポンスの場合
+                        error_data = response.json()
+                        print(f"API returned JSON error: {error_data}")
+                        continue
+                    else:
+                        # 画像データの場合
+                        image_data = base64.b64encode(response.content).decode('utf-8')
+                        print(f"Successfully generated image, size: {len(response.content)} bytes")
+                        return f"data:image/png;base64,{image_data}"
+                        
                 elif response.status_code == 503:
-                    # モデルがロード中の場合、次のモデルを試す
+                    # モデルがロード中の場合
                     print(f"Model {model} is loading, trying next model...")
+                    try:
+                        error_info = response.json()
+                        print(f"503 Error details: {error_info}")
+                    except:
+                        print(f"503 Error: {response.text}")
                     continue
                 else:
-                    print(f"Hugging Face API error with {model}: {response.status_code} - {response.text}")
+                    print(f"Hugging Face API error with {model}: {response.status_code}")
+                    try:
+                        error_info = response.json()
+                        print(f"Error details: {error_info}")
+                    except:
+                        print(f"Error text: {response.text}")
                     continue
                     
             except requests.exceptions.Timeout:
                 print(f"Timeout with model {model}, trying next...")
                 continue
+            except Exception as model_error:
+                print(f"Exception with model {model}: {str(model_error)}")
+                continue
         
+        print("All models failed or are unavailable")
         return None
             
     except Exception as e:
         print(f"Hugging Face画像生成エラー: {str(e)}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return None
 
 # ルートページ
@@ -184,25 +211,42 @@ def get_recipes():
 @app.route('/api/generate-image', methods=['POST'])
 def generate_recipe_image():
     try:
+        print("=== Image generation request received ===")
         data = request.json
+        print(f"Request data: {data}")
+        
         recipe_name = data.get('recipe_name')
         ingredients = data.get('ingredients', [])
 
+        print(f"Recipe name: {recipe_name}")
+        print(f"Ingredients: {ingredients}")
+
         if not recipe_name:
+            print("ERROR: No recipe name provided")
             return jsonify({'error': 'レシピ名が必要です'}), 400
+
+        # 環境変数チェック
+        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
+        print(f"HF API Key present: {bool(hf_api_key)}")
+        if hf_api_key:
+            print(f"HF API Key starts with: {hf_api_key[:10]}...")
 
         # Hugging Face APIを使用して画像生成
         image_url = None
         
-        if os.environ.get('HUGGINGFACE_API_KEY'):
+        if hf_api_key:
+            print("Attempting image generation with Hugging Face...")
             image_url = generate_food_image_huggingface(recipe_name, ingredients)
+            print(f"Image generation result: {bool(image_url)}")
         else:
+            print("ERROR: HUGGINGFACE_API_KEY not found")
             return jsonify({
                 'success': False,
                 'error': 'HUGGINGFACE_API_KEYが設定されていません。環境変数を確認してください。'
             }), 500
 
         if image_url:
+            print("SUCCESS: Image generated successfully")
             return jsonify({
                 'success': True,
                 'image_url': image_url,
@@ -210,12 +254,16 @@ def generate_recipe_image():
                 'timestamp': datetime.now().isoformat()
             })
         else:
+            print("ERROR: Image generation failed")
             return jsonify({
                 'success': False,
                 'error': '画像生成に失敗しました。しばらく時間をおいてから再試行してください。'
             }), 500
 
     except Exception as e:
+        print(f"EXCEPTION in generate_recipe_image: {str(e)}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return jsonify({'error': f'画像生成中にエラーが発生しました: {str(e)}'}), 500
 
 # ヘルスチェック用
