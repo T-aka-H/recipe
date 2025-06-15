@@ -1,405 +1,1254 @@
-from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
-import os
-from datetime import datetime
-import requests
-import base64
-from io import BytesIO
-
-app = Flask(__name__)
-
-# ★ Gemini APIキー設定（環境変数から）
-genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
-
-# ★ Geminiモデル定義（1.5 Flashを使用）
-model = genai.GenerativeModel('models/gemini-1.5-flash')
-
-# 気分一覧
-MOODS = [
-    {"id": "happy", "name": "元気いっぱい", "emoji": "😄"},
-    {"id": "tired", "name": "疲れ気味", "emoji": "😴"},
-    {"id": "healthy", "name": "ヘルシー志向", "emoji": "🥗"},
-    {"id": "comfort", "name": "家庭的な気分", "emoji": "🏠"},
-    {"id": "adventure", "name": "冒険したい", "emoji": "🌟"},
-    {"id": "spicy", "name": "スパイシー", "emoji": "🌶️"}
-]
-
-# 食材リスト
-INGREDIENTS = [
-    {"id": "rice", "name": "お米", "category": "主食"},
-    {"id": "pasta", "name": "パスタ", "category": "主食"},
-    {"id": "bread", "name": "パン", "category": "主食"},
-    {"id": "udon", "name": "うどん", "category": "主食"},
-    {"id": "soba", "name": "そば", "category": "主食"},
-    {"id": "chicken", "name": "鶏肉", "category": "肉類"},
-    {"id": "pork", "name": "豚肉", "category": "肉類"},
-    {"id": "beef", "name": "牛肉", "category": "肉類"},
-    {"id": "ground_meat", "name": "ひき肉", "category": "肉類"},
-    {"id": "salmon", "name": "鮭", "category": "魚類"},
-    {"id": "tuna", "name": "まぐろ", "category": "魚類"},
-    {"id": "shrimp", "name": "えび", "category": "魚類"},
-    {"id": "egg", "name": "卵", "category": "卵・乳製品"},
-    {"id": "milk", "name": "牛乳", "category": "卵・乳製品"},
-    {"id": "cheese", "name": "チーズ", "category": "卵・乳製品"},
-    {"id": "tofu", "name": "豆腐", "category": "大豆製品"},
-    {"id": "natto", "name": "納豆", "category": "大豆製品"},
-    {"id": "onion", "name": "玉ねぎ", "category": "野菜"},
-    {"id": "carrot", "name": "にんじん", "category": "野菜"},
-    {"id": "potato", "name": "じゃがいも", "category": "野菜"},
-    {"id": "cabbage", "name": "キャベツ", "category": "野菜"},
-    {"id": "tomato", "name": "トマト", "category": "野菜"},
-    {"id": "cucumber", "name": "きゅうり", "category": "野菜"},
-    {"id": "lettuce", "name": "レタス", "category": "野菜"},
-    {"id": "spinach", "name": "ほうれん草", "category": "野菜"},
-    {"id": "mushroom", "name": "きのこ類", "category": "野菜"},
-    {"id": "bell_pepper", "name": "ピーマン", "category": "野菜"},
-    {"id": "banana", "name": "バナナ", "category": "果物"},
-    {"id": "apple", "name": "りんご", "category": "果物"},
-    {"id": "lemon", "name": "レモン", "category": "果物"}
-]
-
-
-
-def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face新しいInference Providersを使用して料理画像を生成"""
-    try:
-        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
-        if not hf_api_key:
-            print("ERROR: HUGGINGFACE_API_KEY not found in environment variables")
-            return None
-
-        print(f"Generating AI image for: {recipe_name} with ingredients: {ingredients}")
-
-        # 日本語を英語に翻訳してAIが理解しやすくする
-        recipe_translations = {
-            "ピーマンの塩ダレ焼き": "Grilled green peppers with salt sauce",
-            "親子丼": "Chicken and egg rice bowl (oyakodon)",
-            "きのこの塩焼きおにぎり": "Grilled mushroom rice balls with salt",
-            "チャーハン": "Fried rice",
-            "オムライス": "Omurice (fried rice wrapped in omelet)",
-            "焼きそば": "Yakisoba noodles",
-            "唐揚げ": "Japanese fried chicken (karaage)",
-            "生姜焼き": "Ginger pork stir-fry",
-            "麻婆豆腐": "Mapo tofu",
-            "肉じゃが": "Nikujaga (Japanese beef and potato stew)",
-            "野菜炒め": "Stir-fried vegetables"
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レシピ提案アプリ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        # 料理名を英語に変換
-        english_recipe = recipe_translations.get(recipe_name, recipe_name)
-        
-        # 食材も英語に変換
-        ingredient_translations = {
-            "ピーマン": "green pepper", "玉ねぎ": "onion", "にんじん": "carrot",
-            "じゃがいも": "potato", "鶏肉": "chicken", "豚肉": "pork",
-            "牛肉": "beef", "卵": "egg", "お米": "rice", "パスタ": "pasta",
-            "きのこ類": "mushrooms", "きのこ": "mushrooms"
-        }
-        
-        english_ingredients = []
-        for ingredient in ingredients:
-            english_ingredient = ingredient_translations.get(ingredient, ingredient)
-            english_ingredients.append(english_ingredient)
 
-        # 改良されたプロンプト（英語）
-        prompt = f"A delicious, appetizing photograph of {english_recipe}, Japanese home cooking, beautifully plated with {', '.join(english_ingredients)}, professional food photography, natural lighting, high quality, detailed, realistic"
-        print(f"Using English prompt: {prompt}")
-        
-        # 新しいInference Providers APIを試行
-        try:
-            print("Trying new Inference Providers API...")
-            
-            # 新しいInference Providersのエンドポイント
-            headers = {
-                'Authorization': f'Bearer {hf_api_key}',
-                'Content-Type': 'application/json'
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 10px;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(147, 197, 253, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(196, 181, 253, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(167, 243, 208, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 
+                0 32px 64px rgba(0,0,0,0.12),
+                0 0 0 1px rgba(255,255,255,0.2);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #7dd3fc 0%, #bae6fd 50%, #a5f3fc 100%);
+            color: #0c4a6e;
+            padding: 50px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="%23ffffff" opacity="0.15"/><circle cx="80" cy="40" r="0.8" fill="%23ffffff" opacity="0.1"/><circle cx="40" cy="80" r="1.2" fill="%23ffffff" opacity="0.12"/><circle cx="90" cy="90" r="0.6" fill="%23ffffff" opacity="0.08"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -30px) rotate(120deg); }
+            66% { transform: translate(-20px, 20px) rotate(240deg); }
+        }
+
+        .header h1 {
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            color: #0c4a6e;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 50px 40px;
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(241, 245, 249, 0.8) 100%);
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            font-size: 1.8em;
+            margin-bottom: 25px;
+            color: #0f172a;
+            border-bottom: 3px solid transparent;
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding-bottom: 12px;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .section h2::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            border-radius: 2px;
+        }
+
+        .mood-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .mood-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 2px solid rgba(14, 165, 233, 0.2);
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .mood-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.1), transparent);
+            transition: left 0.6s;
+        }
+
+        .mood-card:hover::before {
+            left: 100%;
+        }
+
+        .mood-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(14, 165, 233, 0.2);
+            border-color: rgba(14, 165, 233, 0.4);
+        }
+
+        .mood-card.selected {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            color: white;
+            border-color: #0ea5e9;
+            box-shadow: 0 15px 35px rgba(14, 165, 233, 0.3);
+            transform: translateY(-5px);
+        }
+
+        .mood-emoji {
+            font-size: 3em;
+            margin-bottom: 12px;
+            display: block;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+            transition: transform 0.3s ease;
+        }
+
+        .mood-card:hover .mood-emoji {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .mood-card .mood-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            letter-spacing: 0.5px;
+        }
+
+        .ingredients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .ingredient-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 2px solid rgba(34, 197, 94, 0.3);
+            border-radius: 16px;
+            padding: 18px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 0.95em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ingredient-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .ingredient-card:hover::before {
+            left: 100%;
+        }
+
+        .ingredient-card:hover {
+            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(34, 197, 94, 0.2);
+        }
+
+        .ingredient-card.selected {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border-color: #22c55e;
+            box-shadow: 0 10px 30px rgba(34, 197, 94, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .category-title {
+            font-weight: 700;
+            color: #64748b;
+            font-size: 0.75em;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .ingredient-card.selected .category-title {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+            color: white;
+            border: none;
+            padding: 18px 45px;
+            font-size: 1.3em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: block;
+            margin: 50px auto;
+            font-weight: 700;
+            box-shadow: 0 15px 35px rgba(14, 165, 233, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .submit-btn:hover:not(:disabled)::before {
+            left: 100%;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(14, 165, 233, 0.4);
+        }
+
+        .submit-btn:disabled {
+            background: linear-gradient(135deg, #cbd5e0 0%, #e2e8f0 100%);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(14, 165, 233, 0.2);
+            border-top: 4px solid #0ea5e9;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+            background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            margin-top: 40px;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+
+        .results h3 {
+            color: #0f172a;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .recipe-content {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 16px;
+            padding: 30px;
+            white-space: pre-wrap;
+            line-height: 1.8;
+            font-size: 1em;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+        }
+
+        .error {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            color: #742a2a;
+            padding: 20px;
+            border-radius: 16px;
+            margin: 20px 0;
+            border: 1px solid rgba(254, 178, 178, 0.5);
+        }
+
+        .reset-btn {
+            background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 25px;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+            transform: translateY(-2px);
+        }
+
+        .image-section {
+            margin-top: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,182,193,0.1) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 2px dashed rgba(255, 154, 158, 0.3);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .image-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,182,193,0.1) 0%, transparent 70%);
+            animation: float 15s ease-in-out infinite;
+        }
+
+        .image-section h4 {
+            font-size: 1.4em;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #ff9a9e, #fecfef);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .image-section p {
+            color: #64748b;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .image-generate-btn {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: #2d3748;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 25px;
+            font-weight: 700;
+            box-shadow: 0 10px 30px rgba(255, 154, 158, 0.3);
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .image-generate-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.6s;
+        }
+
+        .image-generate-btn:hover:not(:disabled)::before {
+            left: 100%;
+        }
+
+        .image-generate-btn:hover:not(:disabled) {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(255, 154, 158, 0.4);
+        }
+
+        .image-generate-btn:disabled {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+            color: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .recipe-image {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            margin-top: 20px;
+            display: none;
+            border: 3px solid rgba(255,255,255,0.8);
+            position: relative;
+            z-index: 1;
+        }
+
+        .image-loading {
+            display: none;
+            margin: 25px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .image-loading-spinner {
+            border: 3px solid rgba(255, 154, 158, 0.2);
+            border-top: 3px solid #ff9a9e;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        .recipe-selector {
+            margin: 25px 0;
+            display: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        .recipe-selector label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 1.05em;
+        }
+
+        .recipe-selector select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(14, 165, 233, 0.3);
+            border-radius: 12px;
+            font-size: 1em;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            color: #0f172a;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .recipe-selector select:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
             }
             
-            # 複数のプロバイダーとモデルを試行
-            provider_configs = [
-                {
-                    'url': 'https://router.huggingface.co/fal-ai/image/generation',
-                    'provider': 'fal-ai',
-                    'model': 'fal-ai/flux-lora'
-                },
-                {
-                    'url': 'https://router.huggingface.co/replicate/image/generation', 
-                    'provider': 'replicate',
-                    'model': 'stability-ai/stable-diffusion'
+            .container {
+                margin: 0;
+                border-radius: 15px;
+                min-width: calc(100vw - 10px);
+            }
+            
+            .header {
+                padding: 25px 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .header p {
+                font-size: 1em;
+            }
+            
+            .content {
+                padding: 25px 15px;
+            }
+            
+            .section {
+                margin-bottom: 30px;
+            }
+            
+            .section h2 {
+                font-size: 1.4em;
+                margin-bottom: 15px;
+            }
+            
+            .mood-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            
+            .mood-card {
+                padding: 20px 10px;
+                border-radius: 15px;
+            }
+            
+            .mood-emoji {
+                font-size: 2em;
+                margin-bottom: 8px;
+            }
+            
+            .mood-card .mood-name {
+                font-size: 0.9em;
+            }
+            
+            .ingredients-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            
+            .ingredient-card {
+                padding: 12px 8px;
+                border-radius: 12px;
+                font-size: 0.85em;
+            }
+            
+            .category-title {
+                font-size: 0.65em;
+                margin-bottom: 4px;
+            }
+            
+            .submit-btn {
+                padding: 15px 25px;
+                font-size: 1.1em;
+                margin: 30px auto;
+                border-radius: 30px;
+            }
+            
+            .results {
+                padding: 20px 15px;
+                border-radius: 15px;
+            }
+            
+            .results h3 {
+                font-size: 1.4em;
+                margin-bottom: 15px;
+            }
+            
+            .recipe-content {
+                padding: 20px;
+                font-size: 0.9em;
+                border-radius: 12px;
+            }
+            
+            .image-section {
+                padding: 20px 15px;
+                border-radius: 15px;
+                margin-top: 25px;
+            }
+            
+            .image-section h4 {
+                font-size: 1.2em;
+            }
+            
+            .image-generate-btn {
+                padding: 12px 20px;
+                font-size: 1em;
+                border-radius: 25px;
+            }
+            
+            .recipe-selector select {
+                padding: 12px;
+                font-size: 0.9em;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.6em;
+            }
+            
+            .mood-card {
+                padding: 15px 8px;
+            }
+            
+            .mood-emoji {
+                font-size: 1.8em;
+            }
+            
+            .ingredient-card {
+                padding: 10px 6px;
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍳 レシピ提案アプリ</h1>
+            <p>気分と食材を選んで、あなたにぴったりのレシピを見つけよう！</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>1. 今日の気分は？</h2>
+                <div class="mood-grid" id="moodGrid">
+                    <div class="mood-card" data-mood="happy">
+                        <span class="mood-emoji">😄</span>
+                        <div class="mood-name">元気いっぱい</div>
+                    </div>
+                    <div class="mood-card" data-mood="tired">
+                        <span class="mood-emoji">😴</span>
+                        <div class="mood-name">疲れ気味</div>
+                    </div>
+                    <div class="mood-card" data-mood="healthy">
+                        <span class="mood-emoji">🥗</span>
+                        <div class="mood-name">ヘルシー志向</div>
+                    </div>
+                    <div class="mood-card" data-mood="comfort">
+                        <span class="mood-emoji">🏠</span>
+                        <div class="mood-name">家庭的な気分</div>
+                    </div>
+                    <div class="mood-card" data-mood="adventure">
+                        <span class="mood-emoji">🌟</span>
+                        <div class="mood-name">冒険したい</div>
+                    </div>
+                    <div class="mood-card" data-mood="spicy">
+                        <span class="mood-emoji">🌶️</span>
+                        <div class="mood-name">スパイシー</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>2. 冷蔵庫にある食材を選択</h2>
+                <div class="ingredients-grid" id="ingredientsGrid">
+                    <div class="ingredient-card" data-ingredient="rice">
+                        <div class="category-title">主食</div>
+                        お米
+                    </div>
+                    <div class="ingredient-card" data-ingredient="pasta">
+                        <div class="category-title">主食</div>
+                        パスタ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="bread">
+                        <div class="category-title">主食</div>
+                        パン
+                    </div>
+                    <div class="ingredient-card" data-ingredient="udon">
+                        <div class="category-title">主食</div>
+                        うどん
+                    </div>
+                    <div class="ingredient-card" data-ingredient="soba">
+                        <div class="category-title">主食</div>
+                        そば
+                    </div>
+                    <div class="ingredient-card" data-ingredient="chicken">
+                        <div class="category-title">肉類</div>
+                        鶏肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="pork">
+                        <div class="category-title">肉類</div>
+                        豚肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="beef">
+                        <div class="category-title">肉類</div>
+                        牛肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="ground_meat">
+                        <div class="category-title">肉類</div>
+                        ひき肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="salmon">
+                        <div class="category-title">魚類</div>
+                        鮭
+                    </div>
+                    <div class="ingredient-card" data-ingredient="tuna">
+                        <div class="category-title">魚類</div>
+                        まぐろ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="shrimp">
+                        <div class="category-title">魚類</div>
+                        えび
+                    </div>
+                    <div class="ingredient-card" data-ingredient="egg">
+                        <div class="category-title">卵・乳製品</div>
+                        卵
+                    </div>
+                    <div class="ingredient-card" data-ingredient="milk">
+                        <div class="category-title">卵・乳製品</div>
+                        牛乳
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cheese">
+                        <div class="category-title">卵・乳製品</div>
+                        チーズ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="tofu">
+                        <div class="category-title">大豆製品</div>
+                        豆腐
+                    </div>
+                    <div class="ingredient-card" data-ingredient="natto">
+                        <div class="category-title">大豆製品</div>
+                        納豆
+                    </div>
+                    <div class="ingredient-card" data-ingredient="onion">
+                        <div class="category-title">野菜</div>
+                        玉ねぎ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="carrot">
+                        <div class="category-title">野菜</div>
+                        にんじん
+                    </div>
+                    <div class="ingredient-card" data-ingredient="potato">
+                        <div class="category-title">野菜</div>
+                        じゃがいも
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cabbage">
+                        <div class="category-title">野菜</div>
+                        キャベツ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="tomato">
+                        <div class="category-title">野菜</div>
+                        トマト
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cucumber">
+                        <div class="category-title">野菜</div>
+                        きゅうり
+                    </div>
+                    <div class="ingredient-card" data-ingredient="lettuce">
+                        <div class="category-title">野菜</div>
+                        レタス
+                    </div>
+                    <div class="ingredient-card" data-ingredient="spinach">
+                        <div class="category-title">野菜</div>
+                        ほうれん草
+                    </div>
+                    <div class="ingredient-card" data-ingredient="mushroom">
+                        <div class="category-title">野菜</div>
+                        きのこ類
+                    </div>
+                    <div class="ingredient-card" data-ingredient="bell_pepper">
+                        <div class="category-title">野菜</div>
+                        ピーマン
+                    </div>
+                    <div class="ingredient-card" data-ingredient="banana">
+                        <div class="category-title">果物</div>
+                        バナナ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="apple">
+                        <div class="category-title">果物</div>
+                        りんご
+                    </div>
+                    <div class="ingredient-card" data-ingredient="lemon">
+                        <div class="category-title">果物</div>
+                        レモン
+                    </div>
+                </div>
+            </div>
+
+            <button class="submit-btn" id="submitBtn" onclick="getRecipes()">
+                レシピを提案してもらう 🍴
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>AIがレシピを考えています...</p>
+            </div>
+
+            <div class="results" id="results">
+                <h3>おすすめレシピ</h3>
+                <div class="recipe-content" id="recipeContent"></div>
+                
+                <div class="image-section" id="imageSection">
+                    <h4>🖼️ 料理の画像を生成</h4>
+                    <p style="color: #666; margin-bottom: 15px;">お気に入りのレシピの画像を生成してみましょう！</p>
+                    
+                    <div class="recipe-selector" id="recipeSelector">
+                        <label for="recipeSelect">画像を生成するレシピを選択：</label>
+                        <select id="recipeSelect">
+                            <option value="">レシピを選択してください</option>
+                        </select>
+                    </div>
+                    
+                    <button class="image-generate-btn" id="imageGenerateBtn" onclick="generateRecipeImage()" disabled>
+                        🎨 画像を生成する
+                    </button>
+                    
+                    <div class="image-loading" id="imageLoading">
+                        <div class="image-loading-spinner"></div>
+                        <p>画像を生成中です...(30秒程お待ちください)</p>
+                    </div>
+                    
+                    <img id="recipeImage" class="recipe-image" alt="生成された料理画像">
+                </div>
+                
+                <button class="reset-btn" onclick="resetForm()">もう一度選択する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let selectedMood = '';
+        let selectedIngredients = [];
+        let currentRecipes = [];
+
+        // 気分選択の処理
+        document.getElementById('moodGrid').addEventListener('click', function(e) {
+            const moodCard = e.target.closest('.mood-card');
+            if (moodCard) {
+                // 既存の選択を解除
+                document.querySelectorAll('.mood-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                
+                // 新しい選択を追加
+                moodCard.classList.add('selected');
+                selectedMood = moodCard.dataset.mood;
+                console.log('選択された気分:', selectedMood);
+                updateSubmitButton();
+            }
+        });
+
+        // 食材選択の処理
+        document.getElementById('ingredientsGrid').addEventListener('click', function(e) {
+            const ingredientCard = e.target.closest('.ingredient-card');
+            if (ingredientCard) {
+                const ingredient = ingredientCard.dataset.ingredient;
+                
+                if (ingredientCard.classList.contains('selected')) {
+                    // 選択解除
+                    ingredientCard.classList.remove('selected');
+                    selectedIngredients = selectedIngredients.filter(item => item !== ingredient);
+                } else {
+                    // 選択追加
+                    ingredientCard.classList.add('selected');
+                    selectedIngredients.push(ingredient);
                 }
-            ]
-            
-            for config in provider_configs:
-                try:
-                    print(f"Trying provider: {config['provider']}")
-                    
-                    data = {
-                        "inputs": prompt,
-                        "model": config['model'],
-                        "parameters": {
-                            "width": 512,
-                            "height": 512,
-                            "guidance_scale": 7.5,
-                            "num_inference_steps": 20
-                        }
-                    }
-                    
-                    response = requests.post(
-                        config['url'],
-                        headers=headers,
-                        json=data,
-                        timeout=120
-                    )
-                    
-                    print(f"Provider {config['provider']} response: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        content_type = response.headers.get('content-type', '')
-                        if 'application/json' not in content_type and len(response.content) > 1000:
-                            image_data = base64.b64encode(response.content).decode('utf-8')
-                            print(f"SUCCESS: Generated image with {config['provider']}")
-                            return f"data:image/png;base64,{image_data}"
-                        else:
-                            print(f"Provider {config['provider']} returned JSON or small response")
-                            try:
-                                json_response = response.json()
-                                print(f"JSON response: {json_response}")
-                            except:
-                                pass
-                    else:
-                        print(f"Provider {config['provider']} failed with status {response.status_code}")
-                        
-                except Exception as provider_error:
-                    print(f"Provider {config['provider']} error: {str(provider_error)}")
-                    continue
-                    
-        except Exception as providers_error:
-            print(f"Inference Providers error: {str(providers_error)}")
-        
-        # フォールバック：従来のAPIを一度だけ試行
-        try:
-            print("Trying fallback: traditional API...")
-            
-            headers = {'Authorization': f'Bearer {hf_api_key}'}
-            data = {"inputs": prompt}
-            
-            # 最も基本的なモデルを1つだけ試行
-            response = requests.post(
-                'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
-                headers=headers, 
-                json=data, 
-                timeout=60
-            )
-            
-            print(f"Fallback response: {response.status_code}")
-            
-            if response.status_code == 200:
-                content_type = response.headers.get('content-type', '')
-                if 'application/json' not in content_type and len(response.content) > 1000:
-                    image_data = base64.b64encode(response.content).decode('utf-8')
-                    print("SUCCESS: Generated image with fallback API")
-                    return f"data:image/png;base64,{image_data}"
-                    
-        except Exception as fallback_error:
-            print(f"Fallback API error: {str(fallback_error)}")
-        
-        print("All AI image generation methods failed")
-        return None
-            
-    except Exception as e:
-        print(f"Hugging Face画像生成エラー: {str(e)}")
-        import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
-        return None
+                
+                console.log('選択された食材:', selectedIngredients);
+                updateSubmitButton();
+            }
+        });
 
-# ルートページ
-@app.route('/')
-def index():
-    return render_template('index.html', moods=MOODS, ingredients=INGREDIENTS)
-
-# レシピ生成API
-@app.route('/api/recipes', methods=['POST'])
-def get_recipes():
-    try:
-        data = request.json
-        mood = data.get('mood')
-        selected_ingredients = data.get('ingredients', [])
-
-        if not mood or not selected_ingredients:
-            return jsonify({'error': '気分と食材を選択してください'}), 400
-
-        ingredient_names = [
-            next((i['name'] for i in INGREDIENTS if i['id'] == ingredient_id), ingredient_id)
-            for ingredient_id in selected_ingredients
-        ]
-        mood_name = next((m['name'] for m in MOODS if m['id'] == mood), mood)
-
-        prompt = f"""
-あなたは経験豊富な日本の家庭料理の料理人です。
-以下の条件に基づいて、5つの料理レシピを提案してください。
-
-【気分・好み】: {mood_name}
-【使用可能な食材】: {', '.join(ingredient_names)}
-
-以下の形式で5つのレシピを提案してください：
-
-1. **料理名**
-   - 調理時間: XX分
-   - 難易度: ★☆☆（3段階）
-   - 材料: 使用する食材を列挙
-   - 作り方: 3〜5ステップで簡潔に
-   - ポイント: 美味しく作るコツ
-
-※注意:
-- 選択された食材はなるべくすべて使用してください。
-- 気分に合った味付け・調理法を選んでください。
-- 一般的な調味料（醤油・塩・胡椒など）は使用可能。
-- 初心者でも作れるレシピを心がけてください。
-"""
-
-        response = model.generate_content(prompt)
-        return jsonify({
-            'success': True,
-            'mood': mood_name,
-            'ingredients': ingredient_names,
-            'recipes': response.text,
-            'timestamp': datetime.now().isoformat()
-        })
-
-    except Exception as e:
-        return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
-
-# 改良されたプレースホルダー画像システム
-@app.route('/api/generate-image', methods=['POST'])
-def generate_recipe_image():
-    try:
-        print("=== Smart Placeholder Image generation ===")
-        data = request.json
-        print(f"Request data: {data}")
-        
-        recipe_name = data.get('recipe_name')
-        ingredients = data.get('ingredients', [])
-
-        print(f"Recipe name: {recipe_name}")
-        print(f"Ingredients: {ingredients}")
-
-        if not recipe_name:
-            print("ERROR: No recipe name provided")
-            return jsonify({'error': 'レシピ名が必要です'}), 400
-
-        # 料理の種類に基づいた高品質なプレースホルダー画像を選択
-        food_categories = {
-            'rice_dishes': {
-                'keywords': ['ご飯', 'おにぎり', 'むすび', '丼', 'チャーハン', '炒飯', '茶漬け', 'おこげ', 'rice'],
-                'images': [
-                    "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'noodles': {
-                'keywords': ['パスタ', 'うどん', 'そば', '焼きそば', 'ラーメン', 'pasta', 'noodles'],
-                'images': [
-                    "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1555126634-323283e090fa?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'vegetables': {
-                'keywords': ['ピーマン', '野菜', 'サラダ', '炒め', 'vegetables', 'salad'],
-                'images': [
-                    "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1529059997568-3d847b1154f0?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'meat_dishes': {
-                'keywords': ['鶏肉', '豚肉', '牛肉', '肉', '唐揚げ', '焼き', 'chicken', 'pork', 'beef'],
-                'images': [
-                    "https://images.unsplash.com/photo-1532636875304-0c89119d9b4d?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1544025162-d76694265947?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'seafood': {
-                'keywords': ['魚', '鮭', 'まぐろ', 'えび', '海鮮', 'fish', 'salmon', 'seafood'],
-                'images': [
-                    "https://images.unsplash.com/photo-1544943910-4c1dc44aab44?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1559847844-d05fcb51d842?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'soups': {
-                'keywords': ['スープ', '汁', '味噌汁', 'soup', 'broth'],
-                'images': [
-                    "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1516684732162-798a0062be99?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
-            },
-            'default': {
-                'keywords': [],
-                'images': [
-                    "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format&q=80",
-                    "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=512&h=512&fit=crop&auto=format&q=80"
-                ]
+        // 送信ボタンの状態更新
+        function updateSubmitButton() {
+            const submitBtn = document.getElementById('submitBtn');
+            if (selectedMood && selectedIngredients.length > 0) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
             }
         }
-        
-        # 料理名から最適なカテゴリを自動判定
-        recipe_lower = recipe_name.lower()
-        selected_category = 'default'
-        
-        for category, data in food_categories.items():
-            if category == 'default':
-                continue
-            if any(keyword in recipe_lower for keyword in data['keywords']):
-                selected_category = category
-                break
-        
-        # 食材からも判定を補強
-        if selected_category == 'default':
-            for ingredient in ingredients:
-                ingredient_lower = ingredient.lower()
-                for category, data in food_categories.items():
-                    if category == 'default':
-                        continue
-                    if any(keyword in ingredient_lower for keyword in data['keywords']):
-                        selected_category = category
-                        break
-                if selected_category != 'default':
-                    break
-        
-        import random
-        selected_images = food_categories[selected_category]['images']
-        image_url = random.choice(selected_images)
-        
-        print(f"Selected category: {selected_category}")
-        print(f"Using high-quality placeholder image: {image_url}")
-        
-        return jsonify({
-            'success': True,
-            'image_url': image_url,
-            'recipe_name': recipe_name,
-            'timestamp': datetime.now().isoformat(),
-            'type': 'Smart Placeholder',
-            'category': selected_category,
-            'note': f'料理カテゴリ「{selected_category}」に基づいた高品質画像を表示中'
-        })
 
-    except Exception as e:
-        print(f"EXCEPTION in generate_recipe_image: {str(e)}")
-        import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
-        return jsonify({'error': f'画像生成中にエラーが発生しました: {str(e)}'}), 500
+        // レシピ取得関数（App.py連動版）
+        async function getRecipes() {
+            if (!selectedMood || selectedIngredients.length === 0) {
+                alert('気分と食材を選択してください！');
+                return;
+            }
 
-# ヘルスチェック用
-@app.route('/health')
-def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+            // UI更新
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
 
-# 実行
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+            try {
+                // FlaskのAPIエンドポイントを呼び出し
+                const response = await fetch('/api/recipes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        mood: selectedMood,
+                        ingredients: selectedIngredients
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayRecipes(data.recipes);
+                } else {
+                    throw new Error(data.error || 'レシピの取得に失敗しました');
+                }
+                
+            } catch (error) {
+                console.error('レシピ取得エラー:', error);
+                
+                // エラー時はサンプルレシピで代替
+                console.log('Flaskサーバーへの接続に失敗しました。サンプルデータを表示します。');
+                const sampleRecipes = generateSampleRecipes(selectedMood, selectedIngredients);
+                displayRecipes(sampleRecipes);
+                showError('サーバーに接続できませんでした。サンプルレシピを表示しています。');
+                
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+
+        // サンプルレシピ生成関数
+        function generateSampleRecipes(mood, ingredients) {
+            const ingredientNames = {
+                'rice': 'お米', 'pasta': 'パスタ', 'bread': 'パン', 'udon': 'うどん', 'soba': 'そば',
+                'chicken': '鶏肉', 'pork': '豚肉', 'beef': '牛肉', 'ground_meat': 'ひき肉',
+                'salmon': '鮭', 'tuna': 'まぐろ', 'shrimp': 'えび',
+                'egg': '卵', 'milk': '牛乳', 'cheese': 'チーズ', 'tofu': '豆腐', 'natto': '納豆',
+                'onion': '玉ねぎ', 'carrot': 'にんじん', 'potato': 'じゃがいも', 'cabbage': 'キャベツ',
+                'tomato': 'トマト', 'cucumber': 'きゅうり', 'lettuce': 'レタス', 'spinach': 'ほうれん草',
+                'mushroom': 'きのこ類', 'bell_pepper': 'ピーマン', 'banana': 'バナナ', 'apple': 'りんご', 'lemon': 'レモン'
+            };
+
+            const selectedIngredientNames = ingredients.map(id => ingredientNames[id] || id);
+            
+            const moodNames = {
+                'happy': '元気いっぱい',
+                'tired': '疲れ気味',
+                'healthy': 'ヘルシー志向',
+                'comfort': '家庭的な気分',
+                'adventure': '冒険したい',
+                'spicy': 'スパイシー'
+            };
+
+            return `【気分・好み】: ${moodNames[mood]}
+【使用可能な食材】: ${selectedIngredientNames.join(', ')}
+
+以下、5つのおすすめレシピをご提案します：
+
+1. **${selectedIngredientNames[0]}と${selectedIngredientNames[1] || '野菜'}の炒め物**
+   - 調理時間: 15分
+   - 難易度: ★☆☆（初心者向け）
+   - 材料: ${selectedIngredientNames.slice(0, 3).join('、')}、醤油、塩、胡椒
+   - 作り方: 
+     1. 食材を適当な大きさに切る
+     2. フライパンで炒める
+     3. 調味料で味付けして完成
+   - ポイント: 強火で手早く炒めると食材の食感が残って美味しい
+
+2. **簡単${selectedIngredientNames[0]}料理**
+   - 調理時間: 20分
+   - 難易度: ★★☆（中級者向け）
+   - 材料: ${selectedIngredientNames.slice(0, 4).join('、')}、だし、みりん
+   - 作り方: 
+     1. 下準備をしっかりと行う
+     2. 順番に加熱していく
+     3. 調味料を加えて煮込む
+     4. 味を調えて完成
+   - ポイント: ${moodNames[mood]}な気分にぴったりの優しい味付け
+
+3. **${selectedIngredientNames[1] || '野菜'}たっぷりヘルシー料理**
+   - 調理時間: 25分
+   - 難易度: ★★☆（中級者向け）
+   - 材料: ${selectedIngredientNames.join('、')}、オリーブオイル、塩
+   - 作り方: 
+     1. 野菜類は食べやすい大きさに切る
+     2. オリーブオイルで炒める
+     3. 蒸し焼きにしてじっくり火を通す
+     4. 塩で味を調える
+   - ポイント: 野菜の甘みを活かした健康的な一品
+
+4. **和風${selectedIngredientNames[0]}丼**
+   - 調理時間: 30分
+   - 難易度: ★★★（上級者向け）
+   - 材料: ${selectedIngredientNames.slice(0, 3).join('、')}、ご飯、卵、醤油、みりん、砂糖
+   - 作り方: 
+     1. 具材を下ごしらえする
+     2. 調味料を合わせて煮汁を作る
+     3. 具材を煮込む
+     4. 卵でとじてご飯にのせる
+   - ポイント: 卵は半熟状態で火を止めると美味しい
+
+5. **創作${selectedIngredientNames[2] || 'ミックス'}料理**
+   - 調理時間: 35分
+   - 難易度: ★★☆（中級者向け）
+   - 材料: ${selectedIngredientNames.join('、')}、お好みの調味料
+   - 作り方: 
+     1. すべての食材を準備する
+     2. 食材の特性に合わせて順番に調理
+     3. 最後に全体を合わせる
+     4. お好みで調味料を追加
+   - ポイント: ${moodNames[mood]}な気分に合わせてアレンジ自在
+
+どのレシピも${moodNames[mood]}な今日にぴったりです！お気に入りのレシピで美味しい料理を作ってくださいね🍴`;
+        }
+
+        // レシピ表示関数
+        function displayRecipes(recipesText) {
+            document.getElementById('recipeContent').textContent = recipesText;
+            document.getElementById('results').style.display = 'block';
+            
+            // レシピ選択肢を更新
+            updateRecipeSelector(recipesText);
+            
+            // 結果エリアまでスクロール
+            document.getElementById('results').scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+
+        // レシピセレクター更新
+        function updateRecipeSelector(recipesText) {
+            const recipeSelect = document.getElementById('recipeSelect');
+            const recipeSelector = document.getElementById('recipeSelector');
+            
+            // 既存のオプションをクリア
+            recipeSelect.innerHTML = '<option value="">レシピを選択してください</option>';
+            
+            // レシピ名を抽出（**で囲まれたテキスト）
+            const recipeMatches = recipesText.match(/\*\*([^*]+)\*\*/g);
+            
+            if (recipeMatches) {
+                currentRecipes = recipeMatches.map(match => match.replace(/\*\*/g, ''));
+                
+                currentRecipes.forEach((recipe, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = recipe;
+                    recipeSelect.appendChild(option);
+                });
+                
+                recipeSelector.style.display = 'block';
+            }
+            
+            // セレクトボックスの変更イベント
+            recipeSelect.addEventListener('change', function() {
+                const imageGenerateBtn = document.getElementById('imageGenerateBtn');
+                if (this.value !== '') {
+                    imageGenerateBtn.disabled = false;
+                } else {
+                    imageGenerateBtn.disabled = true;
+                }
+            });
+        }
+
+        // 画像生成関数（App.py連動版）
+        async function generateRecipeImage() {
+            const recipeSelect = document.getElementById('recipeSelect');
+            const selectedIndex = recipeSelect.value;
+            
+            if (selectedIndex === '') {
+                alert('レシピを選択してください！');
+                return;
+            }
+            
+            const recipeName = currentRecipes[selectedIndex];
+            
+            // UI更新
+            document.getElementById('imageLoading').style.display = 'block';
+            document.getElementById('recipeImage').style.display = 'none';
+            document.getElementById('imageGenerateBtn').disabled = true;
+            
+            try {
+                // FlaskのAPIエンドポイントを呼び出し
+                const response = await fetch('/api/generate-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipe_name: recipeName,
+                        ingredients: selectedIngredients.map(id => {
+                            const ingredientNames = {
+                                'rice': 'お米', 'pasta': 'パスタ', 'bread': 'パン', 'udon': 'うどん', 'soba': 'そば',
+                                'chicken': '鶏肉', 'pork': '豚肉', 'beef': '牛肉', 'ground_meat': 'ひき肉',
+                                'salmon': '鮭', 'tuna': 'まぐろ', 'shrimp': 'えび',
+                                'egg': '卵', 'milk': '牛乳', 'cheese': 'チーズ', 'tofu': '豆腐', 'natto': '納豆',
+                                'onion': '玉ねぎ', 'carrot': 'にんじん', 'potato': 'じゃがいも', 'cabbage': 'キャベツ',
+                                'tomato': 'トマト', 'cucumber': 'きゅうり', 'lettuce': 'レタス', 'spinach': 'ほうれん草',
+                                'mushroom': 'きのこ類', 'bell_pepper': 'ピーマン', 'banana': 'バナナ', 'apple': 'りんご', 'lemon': 'レモン'
+                            };
+                            return ingredientNames[id] || id;
+                        })
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.success && data.image_url) {
+                    const recipeImage = document.getElementById('recipeImage');
+                    recipeImage.src = data.image_url;
+                    recipeImage.alt = `${recipeName}の画像`;
+                    recipeImage.style.display = 'block';
+                } else {
+                    throw new Error(data.error || '画像生成に失敗しました');
+                }
+                
+            } catch (error) {
+                console.error('画像生成エラー:', error);
+                
+                // エラー時はプレースホルダー画像で代替
+                console.log('Flaskサーバーへの接続に失敗しました。プレースホルダー画像を表示します。');
+                const sampleImages = [
+                    'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=512&h=512&fit=crop&auto=format&q=80',
+                    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=512&h=512&fit=crop&auto=format&q=80',
+                    'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=512&h=512&fit=crop&auto=format&q=80',
+                    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=512&h=512&fit=crop&auto=format&q=80'
+                ];
+                
+                const randomImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+                
+                const recipeImage = document.getElementById('recipeImage');
+                recipeImage.src = randomImage;
+                recipeImage.alt = `${recipeName}の画像（プレースホルダー）`;
+                recipeImage.style.display = 'block';
+                
+                showError('画像生成サーバーに接続できませんでした。プレースホルダー画像を表示しています。');
+                
+            } finally {
+                document.getElementById('imageLoading').style.display = 'none';
+                document.getElementById('imageGenerateBtn').disabled = false;
+            }
+        }
+
+        // エラー表示関数
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            
+            // 既存のエラーメッセージを削除
+            const existingError = resultsDiv.querySelector('.error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            resultsDiv.insertBefore(errorDiv, resultsDiv.firstChild);
+            resultsDiv.style.display = 'block';
+        }
+
+        // フォームリセット関数
+        function resetForm() {
+            // 選択状態をリセット
+            selectedMood = '';
+            selectedIngredients = [];
+            currentRecipes = [];
+            
+            // UI状態をリセット
+            document.querySelectorAll('.mood-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            document.querySelectorAll('.ingredient-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // 表示要素を隠す
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('recipeSelector').style.display = 'none';
+            document.getElementById('recipeImage').style.display = 'none';
+            document.getElementById('imageLoading').style.display = 'none';
+            
+            // ボタン状態をリセット
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('imageGenerateBtn').disabled = true;
+            
+            // トップまでスクロール
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('レシピ提案アプリが初期化されました');
+            updateSubmitButton();
+        });
+    </script>
+</body>
+</html>
