@@ -16,12 +16,12 @@ model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 # 気分一覧
 MOODS = [
-    {"id": "salty", "name": "塩味のもの", "emoji": "🧂"},
-    {"id": "spicy", "name": "からいもの", "emoji": "🌶️"},
-    {"id": "sweet", "name": "甘めのもの", "emoji": "🍯"},
-    {"id": "energizing", "name": "元気がでるもの", "emoji": "💪"},
-    {"id": "light", "name": "軽いもの", "emoji": "🥗"},
-    {"id": "gentle", "name": "胃にやさしいもの", "emoji": "☕"}
+    {"id": "happy", "name": "元気いっぱい", "emoji": "😄"},
+    {"id": "tired", "name": "疲れ気味", "emoji": "😴"},
+    {"id": "healthy", "name": "ヘルシー志向", "emoji": "🥗"},
+    {"id": "comfort", "name": "家庭的な気分", "emoji": "🏠"},
+    {"id": "adventure", "name": "冒険したい", "emoji": "🌟"},
+    {"id": "spicy", "name": "スパイシー", "emoji": "🌶️"}
 ]
 
 # 食材リスト
