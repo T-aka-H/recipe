@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レシピ提案アプリ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 3px solid #ff6b6b;
+            padding-bottom: 10px;
+        }
+
+        .mood-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .mood-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .mood-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .mood-card.selected {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            border-color: #ff6b6b;
+        }
+
+        .mood-emoji {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .ingredients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .ingredient-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .ingredient-card:hover {
+            background: #e9ecef;
+        }
+
+        .ingredient-card.selected {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+
+        .category-title {
+            font-weight: bold;
+            color: #666;
+            font-size: 0.8em;
+            margin-bottom: 5px;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 40px auto;
+            font-weight: 600;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #ff6b6b;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .results h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .recipe-content {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 30px 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .mood-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 10px;
+            }
+            
+            .ingredients-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍳 レシピ提案アプリ</h1>
+            <p>気分と食材を選んで、あなたにぴったりのレシピを見つけよう！</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>1. 今日の気分は？</h2>
+                <div class="mood-grid" id="moodGrid">
+                    <div class="mood-card" data-mood="salty">
+                        <span class="mood-emoji">🧂</span>
+                        <div>塩味のもの</div>
+                    </div>
+                    <div class="mood-card" data-mood="spicy">
+                        <span class="mood-emoji">🌶️</span>
+                        <div>からいもの</div>
+                    </div>
+                    <div class="mood-card" data-mood="sweet">
+                        <span class="mood-emoji">🍯</span>
+                        <div>甘めのもの</div>
+                    </div>
+                    <div class="mood-card" data-mood="energizing">
+                        <span class="mood-emoji">💪</span>
+                        <div>元気がでるもの</div>
+                    </div>
+                    <div class="mood-card" data-mood="light">
+                        <span class="mood-emoji">🥗</span>
+                        <div>軽いもの</div>
+                    </div>
+                    <div class="mood-card" data-mood="gentle">
+                        <span class="mood-emoji">☕</span>
+                        <div>胃にやさしいもの</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>2. 冷蔵庫にある食材を選択</h2>
+                <div class="ingredients-grid" id="ingredientsGrid">
+                    <!-- 主食 -->
+                    <div class="ingredient-card" data-ingredient="rice">
+                        <div class="category-title">主食</div>
+                        お米
+                    </div>
+                    <div class="ingredient-card" data-ingredient="pasta">
+                        <div class="category-title">主食</div>
+                        パスタ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="bread">
+                        <div class="category-title">主食</div>
+                        パン
+                    </div>
+                    <div class="ingredient-card" data-ingredient="udon">
+                        <div class="category-title">主食</div>
+                        うどん
+                    </div>
+                    <div class="ingredient-card" data-ingredient="soba">
+                        <div class="category-title">主食</div>
+                        そば
+                    </div>
+                    
+                    <!-- 肉類 -->
+                    <div class="ingredient-card" data-ingredient="chicken">
+                        <div class="category-title">肉類</div>
+                        鶏肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="pork">
+                        <div class="category-title">肉類</div>
+                        豚肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="beef">
+                        <div class="category-title">肉類</div>
+                        牛肉
+                    </div>
+                    <div class="ingredient-card" data-ingredient="ground_meat">
+                        <div class="category-title">肉類</div>
+                        ひき肉
+                    </div>
+                    
+                    <!-- 魚類 -->
+                    <div class="ingredient-card" data-ingredient="salmon">
+                        <div class="category-title">魚類</div>
+                        鮭
+                    </div>
+                    <div class="ingredient-card" data-ingredient="tuna">
+                        <div class="category-title">魚類</div>
+                        まぐろ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="shrimp">
+                        <div class="category-title">魚類</div>
+                        えび
+                    </div>
+                    
+                    <!-- 卵・乳製品 -->
+                    <div class="ingredient-card" data-ingredient="egg">
+                        <div class="category-title">卵・乳製品</div>
+                        卵
+                    </div>
+                    <div class="ingredient-card" data-ingredient="milk">
+                        <div class="category-title">卵・乳製品</div>
+                        牛乳
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cheese">
+                        <div class="category-title">卵・乳製品</div>
+                        チーズ
+                    </div>
+                    
+                    <!-- 大豆製品 -->
+                    <div class="ingredient-card" data-ingredient="tofu">
+                        <div class="category-title">大豆製品</div>
+                        豆腐
+                    </div>
+                    <div class="ingredient-card" data-ingredient="natto">
+                        <div class="category-title">大豆製品</div>
+                        納豆
+                    </div>
+                    
+                    <!-- 野菜 -->
+                    <div class="ingredient-card" data-ingredient="onion">
+                        <div class="category-title">野菜</div>
+                        玉ねぎ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="carrot">
+                        <div class="category-title">野菜</div>
+                        にんじん
+                    </div>
+                    <div class="ingredient-card" data-ingredient="potato">
+                        <div class="category-title">野菜</div>
+                        じゃがいも
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cabbage">
+                        <div class="category-title">野菜</div>
+                        キャベツ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="tomato">
+                        <div class="category-title">野菜</div>
+                        トマト
+                    </div>
+                    <div class="ingredient-card" data-ingredient="cucumber">
+                        <div class="category-title">野菜</div>
+                        きゅうり
+                    </div>
+                    <div class="ingredient-card" data-ingredient="lettuce">
+                        <div class="category-title">野菜</div>
+                        レタス
+                    </div>
+                    <div class="ingredient-card" data-ingredient="spinach">
+                        <div class="category-title">野菜</div>
+                        ほうれん草
+                    </div>
+                    <div class="ingredient-card" data-ingredient="mushroom">
+                        <div class="category-title">野菜</div>
+                        きのこ類
+                    </div>
+                    <div class="ingredient-card" data-ingredient="bell_pepper">
+                        <div class="category-title">野菜</div>
+                        ピーマン
+                    </div>
+                    
+                    <!-- 果物 -->
+                    <div class="ingredient-card" data-ingredient="banana">
+                        <div class="category-title">果物</div>
+                        バナナ
+                    </div>
+                    <div class="ingredient-card" data-ingredient="apple">
+                        <div class="category-title">果物</div>
+                        りんご
+                    </div>
+                    <div class="ingredient-card" data-ingredient="lemon">
+                        <div class="category-title">果物</div>
+                        レモン
+                    </div>
+                </div>
+            </div>
+
+            <button class="submit-btn" id="submitBtn" onclick="getRecipes()">
+                レシピを提案してもらう 🍴
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>AIがレシピを考えています...</p>
+            </div>
+
+            <div class="results" id="results">
+                <h3>おすすめレシピ</h3>
+                <div class="recipe-content" id="recipeContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedMood = null;
+        let selectedIngredients = [];
+
+        // 気分選択
+        document.getElementById('moodGrid').addEventListener('click', function(e) {
+            const moodCard = e.target.closest('.mood-card');
+            if (moodCard) {
+                // 他の選択を解除
+                document.querySelectorAll('.mood-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                
+                // 新しい選択を追加
+                moodCard.classList.add('selected');
+                selectedMood = moodCard.dataset.mood;
+                
+                updateSubmitButton();
+            }
+        });
+
+        // 食材選択
+        document.getElementById('ingredientsGrid').addEventListener('click', function(e) {
+            const ingredientCard = e.target.closest('.ingredient-card');
+            if (ingredientCard) {
+                const ingredient = ingredientCard.dataset.ingredient;
+                
+                if (ingredientCard.classList.contains('selected')) {
+                    // 選択解除
+                    ingredientCard.classList.remove('selected');
+                    selectedIngredients = selectedIngredients.filter(i => i !== ingredient);
+                } else {
+                    // 選択追加
+                    ingredientCard.classList.add('selected');
+                    selectedIngredients.push(ingredient);
+                }
+                
+                updateSubmitButton();
+            }
+        });
+
+        function updateSubmitButton() {
+            const submitBtn = document.getElementById('submitBtn');
+            if (selectedMood && selectedIngredients.length > 0) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = `レシピを提案してもらう (${selectedIngredients.length}個の食材) 🍴`;
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'レシピを提案してもらう 🍴';
+            }
+        }
+
+        async function getRecipes() {
+            if (!selectedMood || selectedIngredients.length === 0) {
+                alert('気分と食材を選択してください');
+                return;
+            }
+
+            // UI更新
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/recipes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        mood: selectedMood,
+                        ingredients: selectedIngredients
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('recipeContent').textContent = data.recipes;
+                    document.getElementById('results').style.display = 'block';
+                } else {
+                    throw new Error(data.error || 'レシピの生成に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('recipeContent').innerHTML = 
+                    `<div class="error">エラー: ${error.message}</div>`;
+                document.getElementById('results').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+
+        // 初期状態でボタンを無効化
+        updateSubmitButton();
+    </script>
+</body>
+</html>
