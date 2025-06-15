@@ -130,6 +130,10 @@
             margin-bottom: 5px;
         }
 
+        .ingredient-card.selected .category-title {
+            color: #e8f5e8;
+        }
+
         .submit-btn {
             background: linear-gradient(135deg, #28a745, #20c997);
             color: white;
@@ -144,7 +148,7 @@
             font-weight: 600;
         }
 
-        .submit-btn:hover {
+        .submit-btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
         }
@@ -208,6 +212,101 @@
             margin: 20px 0;
         }
 
+        .reset-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .reset-btn:hover {
+            background: #5a6268;
+        }
+
+        /* 画像生成機能のスタイル */
+        .image-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            border: 2px dashed #dee2e6;
+            text-align: center;
+        }
+
+        .image-generate-btn {
+            background: linear-gradient(135deg, #6f42c1, #e83e8c);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .image-generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(111, 66, 193, 0.3);
+        }
+
+        .image-generate-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .recipe-image {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            margin-top: 15px;
+            display: none;
+        }
+
+        .image-loading {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .image-loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #6f42c1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        .recipe-selector {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .recipe-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .recipe-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+        }
+
         @media (max-width: 768px) {
             .container {
                 margin: 10px;
@@ -248,169 +347,24 @@
             <div class="section">
                 <h2>1. 今日の気分は？</h2>
                 <div class="mood-grid" id="moodGrid">
-                    <div class="mood-card" data-mood="salty">
-                        <span class="mood-emoji">🧂</span>
-                        <div>塩味のもの</div>
+                    {% for mood in moods %}
+                    <div class="mood-card" data-mood="{{ mood.id }}">
+                        <span class="mood-emoji">{{ mood.emoji }}</span>
+                        <div>{{ mood.name }}</div>
                     </div>
-                    <div class="mood-card" data-mood="spicy">
-                        <span class="mood-emoji">🌶️</span>
-                        <div>からいもの</div>
-                    </div>
-                    <div class="mood-card" data-mood="sweet">
-                        <span class="mood-emoji">🍯</span>
-                        <div>甘めのもの</div>
-                    </div>
-                    <div class="mood-card" data-mood="energizing">
-                        <span class="mood-emoji">💪</span>
-                        <div>元気がでるもの</div>
-                    </div>
-                    <div class="mood-card" data-mood="light">
-                        <span class="mood-emoji">🥗</span>
-                        <div>軽いもの</div>
-                    </div>
-                    <div class="mood-card" data-mood="gentle">
-                        <span class="mood-emoji">☕</span>
-                        <div>胃にやさしいもの</div>
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
 
             <div class="section">
                 <h2>2. 冷蔵庫にある食材を選択</h2>
                 <div class="ingredients-grid" id="ingredientsGrid">
-                    <!-- 主食 -->
-                    <div class="ingredient-card" data-ingredient="rice">
-                        <div class="category-title">主食</div>
-                        お米
+                    {% for ingredient in ingredients %}
+                    <div class="ingredient-card" data-ingredient="{{ ingredient.id }}">
+                        <div class="category-title">{{ ingredient.category }}</div>
+                        {{ ingredient.name }}
                     </div>
-                    <div class="ingredient-card" data-ingredient="pasta">
-                        <div class="category-title">主食</div>
-                        パスタ
-                    </div>
-                    <div class="ingredient-card" data-ingredient="bread">
-                        <div class="category-title">主食</div>
-                        パン
-                    </div>
-                    <div class="ingredient-card" data-ingredient="udon">
-                        <div class="category-title">主食</div>
-                        うどん
-                    </div>
-                    <div class="ingredient-card" data-ingredient="soba">
-                        <div class="category-title">主食</div>
-                        そば
-                    </div>
-                    
-                    <!-- 肉類 -->
-                    <div class="ingredient-card" data-ingredient="chicken">
-                        <div class="category-title">肉類</div>
-                        鶏肉
-                    </div>
-                    <div class="ingredient-card" data-ingredient="pork">
-                        <div class="category-title">肉類</div>
-                        豚肉
-                    </div>
-                    <div class="ingredient-card" data-ingredient="beef">
-                        <div class="category-title">肉類</div>
-                        牛肉
-                    </div>
-                    <div class="ingredient-card" data-ingredient="ground_meat">
-                        <div class="category-title">肉類</div>
-                        ひき肉
-                    </div>
-                    
-                    <!-- 魚類 -->
-                    <div class="ingredient-card" data-ingredient="salmon">
-                        <div class="category-title">魚類</div>
-                        鮭
-                    </div>
-                    <div class="ingredient-card" data-ingredient="tuna">
-                        <div class="category-title">魚類</div>
-                        まぐろ
-                    </div>
-                    <div class="ingredient-card" data-ingredient="shrimp">
-                        <div class="category-title">魚類</div>
-                        えび
-                    </div>
-                    
-                    <!-- 卵・乳製品 -->
-                    <div class="ingredient-card" data-ingredient="egg">
-                        <div class="category-title">卵・乳製品</div>
-                        卵
-                    </div>
-                    <div class="ingredient-card" data-ingredient="milk">
-                        <div class="category-title">卵・乳製品</div>
-                        牛乳
-                    </div>
-                    <div class="ingredient-card" data-ingredient="cheese">
-                        <div class="category-title">卵・乳製品</div>
-                        チーズ
-                    </div>
-                    
-                    <!-- 大豆製品 -->
-                    <div class="ingredient-card" data-ingredient="tofu">
-                        <div class="category-title">大豆製品</div>
-                        豆腐
-                    </div>
-                    <div class="ingredient-card" data-ingredient="natto">
-                        <div class="category-title">大豆製品</div>
-                        納豆
-                    </div>
-                    
-                    <!-- 野菜 -->
-                    <div class="ingredient-card" data-ingredient="onion">
-                        <div class="category-title">野菜</div>
-                        玉ねぎ
-                    </div>
-                    <div class="ingredient-card" data-ingredient="carrot">
-                        <div class="category-title">野菜</div>
-                        にんじん
-                    </div>
-                    <div class="ingredient-card" data-ingredient="potato">
-                        <div class="category-title">野菜</div>
-                        じゃがいも
-                    </div>
-                    <div class="ingredient-card" data-ingredient="cabbage">
-                        <div class="category-title">野菜</div>
-                        キャベツ
-                    </div>
-                    <div class="ingredient-card" data-ingredient="tomato">
-                        <div class="category-title">野菜</div>
-                        トマト
-                    </div>
-                    <div class="ingredient-card" data-ingredient="cucumber">
-                        <div class="category-title">野菜</div>
-                        きゅうり
-                    </div>
-                    <div class="ingredient-card" data-ingredient="lettuce">
-                        <div class="category-title">野菜</div>
-                        レタス
-                    </div>
-                    <div class="ingredient-card" data-ingredient="spinach">
-                        <div class="category-title">野菜</div>
-                        ほうれん草
-                    </div>
-                    <div class="ingredient-card" data-ingredient="mushroom">
-                        <div class="category-title">野菜</div>
-                        きのこ類
-                    </div>
-                    <div class="ingredient-card" data-ingredient="bell_pepper">
-                        <div class="category-title">野菜</div>
-                        ピーマン
-                    </div>
-                    
-                    <!-- 果物 -->
-                    <div class="ingredient-card" data-ingredient="banana">
-                        <div class="category-title">果物</div>
-                        バナナ
-                    </div>
-                    <div class="ingredient-card" data-ingredient="apple">
-                        <div class="category-title">果物</div>
-                        りんご
-                    </div>
-                    <div class="ingredient-card" data-ingredient="lemon">
-                        <div class="category-title">果物</div>
-                        レモン
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -426,6 +380,32 @@
             <div class="results" id="results">
                 <h3>おすすめレシピ</h3>
                 <div class="recipe-content" id="recipeContent"></div>
+                
+                <!-- 画像生成セクション -->
+                <div class="image-section" id="imageSection">
+                    <h4>🖼️ 料理の画像を生成</h4>
+                    <p style="color: #666; margin-bottom: 15px;">お気に入りのレシピの画像を生成してみましょう！</p>
+                    
+                    <div class="recipe-selector" id="recipeSelector">
+                        <label for="recipeSelect">画像を生成するレシピを選択：</label>
+                        <select id="recipeSelect">
+                            <option value="">レシピを選択してください</option>
+                        </select>
+                    </div>
+                    
+                    <button class="image-generate-btn" id="imageGenerateBtn" onclick="generateRecipeImage()" disabled>
+                        🎨 画像を生成する
+                    </button>
+                    
+                    <div class="image-loading" id="imageLoading">
+                        <div class="image-loading-spinner"></div>
+                        <p>画像を生成中です...(30秒程度かかります)</p>
+                    </div>
+                    
+                    <img class="recipe-image" id="recipeImage" alt="生成された料理画像">
+                </div>
+                
+                <button class="reset-btn" onclick="resetForm()">新しくレシピを探す</button>
             </div>
         </div>
     </div>
@@ -433,6 +413,9 @@
     <script>
         let selectedMood = null;
         let selectedIngredients = [];
+        let currentRecipes = [];
+        let selectedRecipeName = '';
+        let currentIngredientNames = [];
 
         // 気分選択
         document.getElementById('moodGrid').addEventListener('click', function(e) {
@@ -482,6 +465,51 @@
             }
         }
 
+        function parseRecipes(recipeText) {
+            // レシピテキストから料理名を抽出
+            const recipes = [];
+            const lines = recipeText.split('\n');
+            
+            for (let line of lines) {
+                // **料理名** の形式を探す
+                const match = line.match(/^\d+\.\s*\*\*(.+?)\*\*/);
+                if (match) {
+                    recipes.push(match[1].trim());
+                }
+            }
+            
+            return recipes;
+        }
+
+        function updateRecipeSelector(recipes) {
+            const select = document.getElementById('recipeSelect');
+            const selector = document.getElementById('recipeSelector');
+            const generateBtn = document.getElementById('imageGenerateBtn');
+            
+            // セレクトボックスをクリア
+            select.innerHTML = '<option value="">レシピを選択してください</option>';
+            
+            if (recipes.length > 0) {
+                recipes.forEach(recipe => {
+                    const option = document.createElement('option');
+                    option.value = recipe;
+                    option.textContent = recipe;
+                    select.appendChild(option);
+                });
+                
+                selector.style.display = 'block';
+                
+                // セレクトボックスの変更イベント
+                select.addEventListener('change', function() {
+                    selectedRecipeName = this.value;
+                    generateBtn.disabled = !selectedRecipeName;
+                });
+            } else {
+                selector.style.display = 'none';
+                generateBtn.disabled = true;
+            }
+        }
+
         async function getRecipes() {
             if (!selectedMood || selectedIngredients.length === 0) {
                 alert('気分と食材を選択してください');
@@ -510,6 +538,19 @@
                 if (data.success) {
                     document.getElementById('recipeContent').textContent = data.recipes;
                     document.getElementById('results').style.display = 'block';
+                    
+                    // レシピ情報を保存
+                    currentRecipes = parseRecipes(data.recipes);
+                    currentIngredientNames = data.ingredients;
+                    
+                    // レシピセレクターを更新
+                    updateRecipeSelector(currentRecipes);
+                    
+                    // 結果までスクロール
+                    document.getElementById('results').scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
                 } else {
                     throw new Error(data.error || 'レシピの生成に失敗しました');
                 }
@@ -522,6 +563,82 @@
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('submitBtn').disabled = false;
             }
+        }
+
+        async function generateRecipeImage() {
+            if (!selectedRecipeName) {
+                alert('レシピを選択してください');
+                return;
+            }
+
+            // UI更新
+            const generateBtn = document.getElementById('imageGenerateBtn');
+            const imageLoading = document.getElementById('imageLoading');
+            const recipeImage = document.getElementById('recipeImage');
+            
+            generateBtn.disabled = true;
+            generateBtn.textContent = '生成中...';
+            imageLoading.style.display = 'block';
+            recipeImage.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/generate-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipe_name: selectedRecipeName,
+                        ingredients: currentIngredientNames
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    recipeImage.src = result.image_url;
+                    recipeImage.style.display = 'block';
+                    
+                    // 画像までスクロール
+                    recipeImage.scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                } else {
+                    alert('画像生成に失敗しました: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('画像生成中にエラーが発生しました: ' + error.message);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = '🎨 画像を生成する';
+                imageLoading.style.display = 'none';
+            }
+        }
+
+        function resetForm() {
+            // 選択状態をリセット
+            selectedMood = null;
+            selectedIngredients = [];
+            currentRecipes = [];
+            selectedRecipeName = '';
+            currentIngredientNames = [];
+            
+            // UI更新
+            document.querySelectorAll('.mood-card, .ingredient-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('recipeImage').style.display = 'none';
+            document.getElementById('recipeSelector').style.display = 'none';
+            document.getElementById('imageGenerateBtn').disabled = true;
+            
+            updateSubmitButton();
+            
+            // トップにスクロール
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // 初期状態でボタンを無効化
