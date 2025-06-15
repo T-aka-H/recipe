@@ -2,9 +2,6 @@ from flask import Flask, render_template, request, jsonify
 import google.generativeai as genai
 import os
 from datetime import datetime
-import requests
-import base64
-from io import BytesIO
 
 app = Flask(__name__)
 
@@ -57,71 +54,6 @@ INGREDIENTS = [
     {"id": "apple", "name": "りんご", "category": "果物"},
     {"id": "lemon", "name": "レモン", "category": "果物"}
 ]
-
-
-
-def generate_food_image_huggingface(recipe_name, ingredients):
-    """Hugging Face APIを使用して料理画像を生成"""
-    try:
-        hf_api_key = os.environ.get('HUGGINGFACE_API_KEY')
-        if not hf_api_key:
-            print("HUGGINGFACE_API_KEY not found")
-            return None
-
-        # 日本料理に特化したプロンプト
-        prompt = f"A beautiful, appetizing photo of {recipe_name}, Japanese home cooking dish, made with {', '.join(ingredients)}, professional food photography, natural soft lighting, wooden table, high resolution, realistic"
-        
-        headers = {
-            'Authorization': f'Bearer {hf_api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        data = {
-            'inputs': prompt,
-            'parameters': {
-                'negative_prompt': 'blurry, low quality, distorted, ugly, bad anatomy',
-                'num_inference_steps': 30,
-                'guidance_scale': 7.5,
-                'width': 512,
-                'height': 512
-            }
-        }
-        
-        # より信頼性の高いモデルを使用
-        models_to_try = [
-            'runwayml/stable-diffusion-v1-5',
-            'stabilityai/stable-diffusion-xl-base-1.0',
-            'CompVis/stable-diffusion-v1-4'
-        ]
-        
-        for model in models_to_try:
-            try:
-                response = requests.post(
-                    f'https://api-inference.huggingface.co/models/{model}',
-                    headers=headers, json=data, timeout=120
-                )
-                
-                if response.status_code == 200:
-                    # 画像データをBase64エンコード
-                    image_data = base64.b64encode(response.content).decode('utf-8')
-                    return f"data:image/png;base64,{image_data}"
-                elif response.status_code == 503:
-                    # モデルがロード中の場合、次のモデルを試す
-                    print(f"Model {model} is loading, trying next model...")
-                    continue
-                else:
-                    print(f"Hugging Face API error with {model}: {response.status_code} - {response.text}")
-                    continue
-                    
-            except requests.exceptions.Timeout:
-                print(f"Timeout with model {model}, trying next...")
-                continue
-        
-        return None
-            
-    except Exception as e:
-        print(f"Hugging Face画像生成エラー: {str(e)}")
-        return None
 
 # ルートページ
 @app.route('/')
@@ -179,44 +111,6 @@ def get_recipes():
 
     except Exception as e:
         return jsonify({'error': f'レシピ生成中にエラーが発生しました: {str(e)}'}), 500
-
-# 画像生成API
-@app.route('/api/generate-image', methods=['POST'])
-def generate_recipe_image():
-    try:
-        data = request.json
-        recipe_name = data.get('recipe_name')
-        ingredients = data.get('ingredients', [])
-
-        if not recipe_name:
-            return jsonify({'error': 'レシピ名が必要です'}), 400
-
-        # Hugging Face APIを使用して画像生成
-        image_url = None
-        
-        if os.environ.get('HUGGINGFACE_API_KEY'):
-            image_url = generate_food_image_huggingface(recipe_name, ingredients)
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'HUGGINGFACE_API_KEYが設定されていません。環境変数を確認してください。'
-            }), 500
-
-        if image_url:
-            return jsonify({
-                'success': True,
-                'image_url': image_url,
-                'recipe_name': recipe_name,
-                'timestamp': datetime.now().isoformat()
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': '画像生成に失敗しました。しばらく時間をおいてから再試行してください。'
-            }), 500
-
-    except Exception as e:
-        return jsonify({'error': f'画像生成中にエラーが発生しました: {str(e)}'}), 500
 
 # ヘルスチェック用
 @app.route('/health')
